@@ -9,9 +9,17 @@ import numpy as np, pandas as pd, streamlit as st
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Proyeksi SPI Banten 2026-2050", layout="wide")
+st.markdown("""<style>
+[data-testid="stMetric"] {background: rgba(13,91,214,0.10); border: 1.5px solid rgba(13,91,214,0.55); border-radius: 10px; padding: 12px 14px;}
+[data-testid="stMetricValue"] {font-weight: 800;}
+[data-testid="stMetricLabel"] p {font-weight: 600;}
+button[data-baseweb="tab"] p {font-weight: 700; font-size: 1.02rem;}
+</style>""", unsafe_allow_html=True)
 MON = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 PRESET = {"Semua bulan": list(range(1, 13)), "DJF (Des-Feb)": [12, 1, 2], "MAM (Mar-Mei)": [3, 4, 5], "JJA (Jun-Agu)": [6, 7, 8], "SON (Sep-Nov)": [9, 10, 11], "Pilih sendiri": None}
-BIRU, BIRU_MUDA, ORANYE = "#1f77b4", "rgba(31,119,180,0.22)", "#ff7f0e"
+BIRU, BIRU_MUDA, ORANYE = "#0d5bd6", "rgba(13,91,214,0.30)", "#f57c00"
+C_BASE, C_TARGET, C_ABU = "#8e8e8e", "#d81b60", "#9aa0a6"          # baseline model, acuan CHIRPS, bulan tak terpilih
+GAYA = {"Peta dasar terang (disarankan)": "carto-positron", "Peta dasar gelap": "carto-darkmatter", "Peta dasar OpenStreetMap": "open-street-map", "Kotak saja": None}
 
 # ---------------- sumber data ----------------
 def ambil_drive_id():
@@ -67,12 +75,15 @@ bln = muat_bulanan(folder, versi_folder(folder))
 
 # ---------------- pembantu grafik ----------------
 def tampil(fig, tinggi=420):
-    fig.update_layout(template="plotly_white", height=tinggi, margin=dict(l=10, r=10, t=50, b=10), legend=dict(orientation="h", y=-0.18, x=0))
+    fig.update_layout(height=tinggi, margin=dict(l=10, r=10, t=56, b=10), legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=13)), font=dict(size=14),
+                      title=dict(font=dict(size=16)), hoverlabel=dict(font_size=14))
+    fig.update_xaxes(showgrid=True, gridcolor="rgba(128,128,128,0.35)", linecolor="rgba(128,128,128,0.9)", linewidth=1.5, ticks="outside", tickfont=dict(size=13))
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.35)", linecolor="rgba(128,128,128,0.9)", linewidth=1.5, ticks="outside", tickfont=dict(size=13))
     try: st.plotly_chart(fig, width="stretch")
     except TypeError: st.plotly_chart(fig, use_container_width=True)
 
 def garis_acuan(fig, x, nilai, nama, warna, dash):
-    fig.add_trace(go.Scatter(x=[min(x), max(x)], y=[nilai, nilai], mode="lines", name=nama, line=dict(color=warna, dash=dash, width=1.5), hovertemplate=f"{nama}: {nilai:.1f}%<extra></extra>"))
+    fig.add_trace(go.Scatter(x=[min(x), max(x)], y=[nilai, nilai], mode="lines", name=nama, line=dict(color=warna, dash=dash, width=2.5), hovertemplate=f"{nama}: {nilai:.1f}%<extra></extra>"))
 
 def batas_skala(v, mode):
     """Batas skala warna mengikuti sebaran data (persentil ke-98) supaya peta tidak jenuh saat hanya sedikit tahun dipilih."""
@@ -88,19 +99,19 @@ def kotak_geojson(df, h):
     return {"type": "FeatureCollection", "features": [{"type": "Feature", "id": str(int(g)), "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[lo - h, la - h], [lo + h, la - h], [lo + h, la + h], [lo - h, la + h], [lo - h, la - h]]]}}
                                                       for g, lo, la in zip(df["grid_id"], df["lon"], df["lat"])]}
 
-def peta(df, kol, judul, warna, zmin, zmax, satuan, label, extra=(), zmid=None, dasar=True):
-    """Peta grid interaktif. dasar=True: kotak di atas peta dasar OpenStreetMap; False: kotak saja. extra = [(judul, kolom, satuan), ...] untuk tooltip."""
+def peta(df, kol, judul, warna, zmin, zmax, satuan, label, extra=(), zmid=None, gaya="carto-positron"):
+    """Peta grid interaktif. gaya = nama gaya peta dasar (carto-positron, carto-darkmatter, open-street-map) atau None untuk kotak saja. extra = [(judul, kolom, satuan), ...] untuk tooltip."""
     lon, lat = df["lon"].round(4).to_numpy(), df["lat"].round(4).to_numpy(); xs, ys = np.unique(lon), np.unique(lat)
     h = float(np.median(np.diff(xs)) / 2) if len(xs) > 1 else 0.025
     judul_cb = satuan.strip() or None
     tip = "Bujur %{customdata[0]:.3f}, Lintang %{customdata[1]:.3f}<br><b>" + label + ": %{z:.1f}" + satuan + "</b>"
     for i, (jd, _, sat) in enumerate(extra): tip += f"<br>{jd}: %{{customdata[{i + 2}]:.1f}}{sat}"
-    if dasar and hasattr(go, "Choroplethmap"):
+    if gaya and hasattr(go, "Choroplethmap"):
         cd = np.c_[lon, lat, df[[k for _, k, _ in extra]].to_numpy()] if extra else np.c_[lon, lat]
         tr = go.Choroplethmap(geojson=kotak_geojson(df.assign(lon=lon, lat=lat), h), locations=df["grid_id"].astype(int).astype(str), z=df[kol], customdata=cd, colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid,
-                              marker=dict(opacity=0.72, line=dict(width=0.3, color="white")), hovertemplate=tip + "<extra></extra>", colorbar=dict(title=judul_cb))
+                              marker=dict(opacity=0.88, line=dict(width=0.6, color="white")), hovertemplate=tip + "<extra></extra>", colorbar=dict(title=judul_cb))
         fig = go.Figure(tr); zoom = float(np.clip(np.log2(500 / 256 * 360 / (max(xs.max() - xs.min(), 0.2) * 1.2)) - 0.1, 5, 11))
-        fig.update_layout(map=dict(style="open-street-map", center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom))
+        fig.update_layout(map=dict(style=gaya, center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom))
     else:
         tip2 = tip.replace("%{customdata[0]:.3f}", "%{x:.3f}").replace("%{customdata[1]:.3f}", "%{y:.3f}")
         if len(xs) * len(ys) <= 6 * len(df):                                       # grid teratur -> kotak per sel
@@ -124,8 +135,8 @@ if not str(meta["status_gerbang"]).startswith("lolos"):
 st.info(meta["catatan"][1])
 
 skala = st.sidebar.radio("Skala SPI", meta["spi_skala"], index=0)
-gaya_peta = st.sidebar.radio("Gaya peta", ["Peta dasar (OpenStreetMap)", "Kotak saja"], index=0, help="Peta dasar memuat ubin dari internet. Pilih 'Kotak saja' bila peta dasar tidak tampil.")
-dasar = gaya_peta.startswith("Peta dasar")
+gaya_nama = st.sidebar.radio("Gaya peta", list(GAYA), index=0, help="Peta dasar memuat ubin dari internet. 'Terang' paling menonjolkan warna data; pilih 'Kotak saja' bila peta dasar tidak tampil.")
+gaya = GAYA[gaya_nama]
 r = reg[reg["SPI"] == skala].sort_values("tahun"); base = float(meta["baseline_model_sendiri_pct"][skala]); acuan = float(meta["acuan_target_pct"][skala])
 tab1, tab2, tab_b, tab3 = st.tabs(["Wilayah per tahun", "Peta tahunan", "Bulanan & agregasi", "Cara membaca"])
 
@@ -139,10 +150,10 @@ with tab1:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=r["tahun"], y=r["kering_pct_p10"], mode="lines", line=dict(width=0), name="p10", showlegend=False, hovertemplate="p10: %{y:.1f}%<extra></extra>"))
     fig.add_trace(go.Scatter(x=r["tahun"], y=r["kering_pct_p90"], mode="lines", line=dict(width=0), fill="tonexty", fillcolor=BIRU_MUDA, name="p10-p90 antar-anggota", hovertemplate="p90: %{y:.1f}%<extra></extra>"))
-    fig.add_trace(go.Scatter(x=r["tahun"], y=r["kering_pct_median"], mode="lines+markers", line=dict(color=BIRU, width=2.5), marker=dict(size=7, symbol=np.where(inc, "circle-open", "circle").tolist()), customdata=r["n_bulan_valid"],
+    fig.add_trace(go.Scatter(x=r["tahun"], y=r["kering_pct_median"], mode="lines+markers", line=dict(color=BIRU, width=3.5), marker=dict(size=9, symbol=np.where(inc, "circle-open", "circle").tolist()), customdata=r["n_bulan_valid"],
                              name="median", hovertemplate="<b>median: %{y:.1f}%</b> (%{customdata} bulan valid)<extra></extra>"))
-    fig.add_trace(go.Scatter(x=roll.index, y=roll.values, mode="lines", line=dict(color=ORANYE, width=2, dash="dashdot"), name="rata-rata bergulir 5 tahun", hovertemplate="rata-rata 5 tahun: %{y:.1f}%<extra></extra>"))
-    garis_acuan(fig, r["tahun"], base, "baseline model sendiri 1981-2010", "gray", "dot"); garis_acuan(fig, r["tahun"], acuan, f"acuan {meta['target']} 1981-2010", "black", "dash")
+    fig.add_trace(go.Scatter(x=roll.index, y=roll.values, mode="lines", line=dict(color=ORANYE, width=3, dash="dashdot"), name="rata-rata bergulir 5 tahun", hovertemplate="rata-rata 5 tahun: %{y:.1f}%<extra></extra>"))
+    garis_acuan(fig, r["tahun"], base, "baseline model sendiri 1981-2010", C_BASE, "dot"); garis_acuan(fig, r["tahun"], acuan, f"acuan {meta['target']} 1981-2010", C_TARGET, "dash")
     fig.update_layout(title=f"{skala}: frekuensi kekeringan per tahun", hovermode="x unified", xaxis_title="tahun", yaxis_title="% grid-bulan SPI <= -1"); tampil(fig, 440)
     st.caption("Satu tahun = satu realisasi variabilitas GCM, bukan ramalan tahun itu. Pita hanya menggambarkan sebaran dalam satu model. Garis oranye (rata-rata 5 tahun) membantu melihat apakah ada kecenderungan di balik naik-turunnya tahun ke tahun.")
     if inc.any():
@@ -157,8 +168,8 @@ with tab2:
     besaran = cB.radio("Besaran", ["spi_rata2", "kering_pct", "spi_des"], horizontal=True, format_func=lambda v: ETIKET.get(v, v))
     g = grd[(grd["SPI"] == skala) & (grd["tahun"] == tahun)].dropna(subset=[besaran])
     if g.empty: st.warning("Tidak ada nilai untuk pilihan ini (mis. SPI Desember pada skala yang belum terisi).")
-    elif besaran == "kering_pct": tampil(peta(g, besaran, f"{skala}, {tahun}: % bulan kering (median anggota)", "YlOrBr", 0, 100, "%", ETIKET[besaran], dasar=dasar), 540)
-    else: tampil(peta(g, besaran, f"{skala}, {tahun}: {ETIKET[besaran]} (median anggota)", "BrBG", -2, 2, "", ETIKET[besaran], zmid=0, dasar=dasar), 540)
+    elif besaran == "kering_pct": tampil(peta(g, besaran, f"{skala}, {tahun}: % bulan kering (median anggota)", "YlOrRd", 0, 100, "%", ETIKET[besaran], gaya=gaya), 540)
+    else: tampil(peta(g, besaran, f"{skala}, {tahun}: {ETIKET[besaran]} (median anggota)", "BrBG", -2, 2, "", ETIKET[besaran], zmid=0, gaya=gaya), 540)
 
 # ---------------- tab 3: bulanan & agregasi ----------------
 with tab_b:
@@ -201,35 +212,35 @@ with tab_b:
                 jd = f"{skala} | {ket} | {etiket_th}, {etiket_bl}"
                 cA, cB = st.columns(2)
                 with cA:
-                    if ket.startswith("Frekuensi"): z0, z1 = batas_skala(agg["p_kering"], "pos"); fg = peta(agg, "p_kering", jd, "YlOrBr", z0, z1, "%", "Frekuensi kering", ekstra, dasar=dasar)
-                    elif ket.startswith("Selisih"): z0, z1 = batas_skala(agg["selisih_pp"], "pp"); fg = peta(agg, "selisih_pp", jd, "RdBu_r", z0, z1, " pp", "Selisih vs baseline", ekstra, zmid=0, dasar=dasar)
-                    else: z0, z1 = batas_skala(agg["spi"], "spi"); fg = peta(agg, "spi", jd, "BrBG", z0, z1, "", "SPI median", ekstra, zmid=0, dasar=dasar)
+                    if ket.startswith("Frekuensi"): z0, z1 = batas_skala(agg["p_kering"], "pos"); fg = peta(agg, "p_kering", jd, "YlOrRd", z0, z1, "%", "Frekuensi kering", ekstra, gaya=gaya)
+                    elif ket.startswith("Selisih"): z0, z1 = batas_skala(agg["selisih_pp"], "pp"); fg = peta(agg, "selisih_pp", jd, "RdBu_r", z0, z1, " pp", "Selisih vs baseline", ekstra, zmid=0, gaya=gaya)
+                    else: z0, z1 = batas_skala(agg["spi"], "spi"); fg = peta(agg, "spi", jd, "BrBG", z0, z1, "", "SPI median", ekstra, zmid=0, gaya=gaya)
                     tampil(fg, 480); st.caption(f"Skala warna menyesuaikan sebaran data ({z0:g} sampai {z1:g}).")
                 with cB:
                     per_th = gs.groupby("tahun")["p_kering"].mean() * 100
                     fig = go.Figure(go.Bar(x=per_th.index, y=per_th.values, marker_color=BIRU, name="frekuensi kering yang diharapkan", hovertemplate="Tahun %{x}<br><b>%{y:.1f}%</b> bulan kering<extra></extra>"))
-                    garis_acuan(fig, list(per_th.index), fb, "baseline model sendiri (bulan sama)", "gray", "dot"); garis_acuan(fig, list(per_th.index), ft, f"baseline {meta['target']}", "black", "dash")
+                    garis_acuan(fig, list(per_th.index), fb, "baseline model sendiri (bulan sama)", C_BASE, "dot"); garis_acuan(fig, list(per_th.index), ft, f"baseline {meta['target']}", C_TARGET, "dash")
                     fig.update_layout(title="Per tahun, bulan terpilih (rata-rata wilayah)", xaxis_title="tahun", yaxis_title="% bulan kering", hovermode="x unified"); tampil(fig, 480)
                 # profil bulan kalender (tahun terpilih, semua bulan; bulan terpilih diberi warna) + kisaran acak kasar di sekitar baseline
                 gt = grdm[grdm["tahun"].isin(tahun_pilih)]; prof = gt.groupby("bulan")["p_kering"].mean() * 100; bb = basem.groupby("bulan")[["kering_model_pct", "kering_target_pct"]].mean()
                 nm = [MON[b - 1] for b in bb.index]; pbase = (bb["kering_model_pct"] / 100).clip(0.001, 0.999); se2 = 200 * np.sqrt(pbase * (1 - pbase) / len(tahun_pilih))
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=nm, y=(bb["kering_model_pct"] - se2).clip(lower=0), mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-                fig.add_trace(go.Scatter(x=nm, y=bb["kering_model_pct"] + se2, mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(128,128,128,0.18)", name=f"kisaran acak baseline (±2 SE, {len(tahun_pilih)} tahun; perkiraan kasar)", hoverinfo="skip"))
-                fig.add_trace(go.Bar(x=[MON[b - 1] for b in prof.index], y=prof.values, marker_color=[BIRU if b in bulan else "lightgray" for b in prof.index], name="proyeksi (tahun terpilih)", hovertemplate="%{x}<br><b>%{y:.1f}%</b> bulan kering<extra></extra>"))
-                fig.add_trace(go.Scatter(x=nm, y=bb["kering_model_pct"], mode="lines+markers", line=dict(color="gray", dash="dot"), name="baseline model sendiri 1981-2010", hovertemplate="%{x}: %{y:.1f}%<extra>baseline model</extra>"))
-                fig.add_trace(go.Scatter(x=nm, y=bb["kering_target_pct"], mode="lines+markers", line=dict(color="black", dash="dash"), name=f"baseline {meta['target']} 1981-2010", hovertemplate="%{x}: %{y:.1f}%<extra>baseline target</extra>"))
+                fig.add_trace(go.Scatter(x=nm, y=bb["kering_model_pct"] + se2, mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(128,128,128,0.28)", name=f"kisaran acak baseline (±2 SE, {len(tahun_pilih)} tahun; perkiraan kasar)", hoverinfo="skip"))
+                fig.add_trace(go.Bar(x=[MON[b - 1] for b in prof.index], y=prof.values, marker_color=[BIRU if b in bulan else C_ABU for b in prof.index], name="proyeksi (tahun terpilih)", hovertemplate="%{x}<br><b>%{y:.1f}%</b> bulan kering<extra></extra>"))
+                fig.add_trace(go.Scatter(x=nm, y=bb["kering_model_pct"], mode="lines+markers", line=dict(color=C_BASE, dash="dot", width=3), marker=dict(size=7), name="baseline model sendiri 1981-2010", hovertemplate="%{x}: %{y:.1f}%<extra>baseline model</extra>"))
+                fig.add_trace(go.Scatter(x=nm, y=bb["kering_target_pct"], mode="lines+markers", line=dict(color=C_TARGET, dash="dash", width=3), marker=dict(size=7), name=f"baseline {meta['target']} 1981-2010", hovertemplate="%{x}: %{y:.1f}%<extra>baseline target</extra>"))
                 fig.update_layout(title="Profil per bulan kalender (bulan terpilih berwarna biru)", xaxis_title="bulan", yaxis_title="% bulan kering", hovermode="x unified"); tampil(fig, 400)
                 st.caption("Batang di luar pita abu-abu menyimpang lebih dari kisaran acak sampel, tetapi itu belum berarti sinyal iklim: bisa berasal dari variabilitas internal GCM pada satu lintasan atau dari prediktor. Dengan banyak bulan yang dibandingkan sekaligus, beberapa penyimpangan memang diharapkan muncul.")
                 # deret bulanan wilayah
                 rt = regm.sort_values(["tahun", "bulan"]).reset_index(drop=True); thn = rt["tahun"].isin(tahun_pilih).to_numpy(); ok = rt["bulan"].isin(bulan).to_numpy() & thn
                 tgl = pd.to_datetime(dict(year=rt["tahun"], month=rt["bulan"], day=1)); sub = rt[ok]
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=tgl, y=rt["spi_median"].where(thn), mode="lines", line=dict(color="lightgray", width=1), name="semua bulan (tahun terpilih)", hovertemplate="%{x|%b %Y}: %{y:.2f}<extra></extra>"))
-                fig.add_trace(go.Scatter(x=tgl[ok], y=sub["spi_median"], mode="markers", marker=dict(color=BIRU, size=6), name="median (bulan terpilih)",
-                                         error_y=dict(type="data", symmetric=False, array=(sub["spi_p90"] - sub["spi_median"]).to_numpy(), arrayminus=(sub["spi_median"] - sub["spi_p10"]).to_numpy(), color="rgba(31,119,180,0.35)", thickness=1, width=0),
+                fig.add_trace(go.Scatter(x=tgl, y=rt["spi_median"].where(thn), mode="lines", line=dict(color=C_ABU, width=1.5), name="semua bulan (tahun terpilih)", hovertemplate="%{x|%b %Y}: %{y:.2f}<extra></extra>"))
+                fig.add_trace(go.Scatter(x=tgl[ok], y=sub["spi_median"], mode="markers", marker=dict(color=BIRU, size=8), name="median (bulan terpilih)",
+                                         error_y=dict(type="data", symmetric=False, array=(sub["spi_p90"] - sub["spi_median"]).to_numpy(), arrayminus=(sub["spi_median"] - sub["spi_p10"]).to_numpy(), color="rgba(13,91,214,0.55)", thickness=1.6, width=0),
                                          customdata=np.c_[sub["spi_p10"], sub["spi_p90"]], hovertemplate="%{x|%b %Y}<br><b>median %{y:.2f}</b><br>p10 %{customdata[0]:.2f} | p90 %{customdata[1]:.2f}<extra></extra>"))
-                fig.add_hline(y=-1, line_dash="dash", line_color="#d62728", annotation_text="ambang kering (-1)", annotation_position="bottom right"); fig.add_hline(y=0, line_color="black", line_width=0.6)
+                fig.add_hline(y=-1, line_dash="dash", line_width=2.5, line_color="#e53935", annotation_text="ambang kering (-1)", annotation_position="bottom right"); fig.add_hline(y=0, line_color="#888", line_width=1)
                 fig.update_layout(title=f"Deret SPI bulanan wilayah ({skala}, median anggota; garis tegak = p10-p90)", yaxis_title=f"{skala} rata-rata wilayah", hovermode="closest"); tampil(fig, 380)
                 st.caption("Makin banyak tahun dan bulan yang digabung, makin bermakna. Satu bulan atau satu tahun hanyalah satu realisasi GCM, bukan ramalan.")
 
