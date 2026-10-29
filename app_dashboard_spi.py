@@ -86,7 +86,7 @@ with tab1:
         st.caption("Tahun awal punya bulan SPI kosong: " + ", ".join(f"{int(t)} ({int(n)} bulan valid)" for t, n in r.loc[r['n_bulan_valid'] < 12, ['tahun', 'n_bulan_valid']].to_numpy()))
 ETIKET = {"spi_rata2": "SPI rata-rata tahunan", "kering_pct": "% bulan kering", "spi_des": "SPI Desember"}
 with tab2:
-    tahun = st.slider("Tahun", int(grd["tahun"].min()), int(grd["tahun"].max()), int(grd["tahun"].min()))
+    tahun = st.selectbox("Tahun", sorted(grd["tahun"].unique().tolist()), key="tahun_peta")
     besaran = st.radio("Besaran", ["spi_rata2", "kering_pct", "spi_des"], horizontal=True, format_func=lambda v: ETIKET.get(v, v))
     g = grd[(grd["SPI"] == skala) & (grd["tahun"] == tahun)]
     fig, ax = plt.subplots(figsize=(7, 5.2))
@@ -101,16 +101,25 @@ with tab_b:
     else:
         regm, grdm, basem, grid = bln
         regm, grdm, basem = (d[d["SPI"] == skala] for d in (regm, grdm, basem))
-        y0, y1 = int(regm["tahun"].min()), int(regm["tahun"].max())
+        daftar_th = sorted(regm["tahun"].unique().tolist())
         k1, k2 = st.columns([1, 2])
-        th0, th1 = k1.slider("Rentang tahun", y0, y1, (y0, y1))
+        mode_th = k1.radio("Pilih tahun", ["Rentang (dari - sampai)", "Tahun tertentu"], horizontal=True, key="mode_th")
+        if mode_th.startswith("Rentang"):
+            ca, cb = k1.columns(2)
+            th0 = ca.selectbox("Dari", daftar_th, index=0, key="th_dari"); th1 = cb.selectbox("Sampai", daftar_th, index=len(daftar_th) - 1, key="th_sampai")
+            tahun_pilih = [t for t in daftar_th if th0 <= t <= th1]
+        else:
+            tahun_pilih = sorted(k1.multiselect("Tahun", daftar_th, default=daftar_th[:5], key="th_multi"))
         pilih = k2.radio("Bulan", list(PRESET), horizontal=True)
         bulan = PRESET[pilih] if PRESET[pilih] is not None else [MON.index(m) + 1 for m in st.multiselect("Pilih bulan", MON, default=MON[5:9])]
         if not bulan:
             st.warning("Pilih minimal satu bulan.")
+        elif not tahun_pilih:
+            st.warning("Pilih minimal satu tahun (untuk rentang: 'Sampai' tidak boleh lebih awal dari 'Dari').")
         else:
-            sel = lambda d: d[(d["tahun"] >= th0) & (d["tahun"] <= th1) & (d["bulan"].isin(bulan))]
-            gs = sel(grdm); rs = sel(regm)
+            sel = lambda d: d[d["tahun"].isin(tahun_pilih) & d["bulan"].isin(bulan)]
+            gs = sel(grdm)
+            etiket_th = f"{tahun_pilih[0]}-{tahun_pilih[-1]}" if tahun_pilih[-1] - tahun_pilih[0] + 1 == len(tahun_pilih) else f"{len(tahun_pilih)} tahun terpilih ({tahun_pilih[0]}...{tahun_pilih[-1]})"
             if gs.empty:
                 st.warning("Tidak ada data untuk pilihan ini (mis. SPI-12 belum terisi pada bulan awal 2026).")
             else:
@@ -119,7 +128,7 @@ with tab_b:
                 bs = basem[basem["bulan"].isin(bulan)].groupby("grid_id")[["kering_model_pct", "kering_target_pct"]].mean().reset_index()
                 agg = agg.merge(bs, on="grid_id").merge(grid, on="grid_id"); agg["selisih_pp"] = agg["p_kering"] - agg["kering_model_pct"]
                 n_bt = gs.groupby("grid_id").size().max()
-                st.caption(f"{len(bulan)} bulan x {th1 - th0 + 1} tahun = sampai {int(n_bt)} bulan per grid yang digabung (hanya bulan dengan SPI terisi).")
+                st.caption(f"{len(bulan)} bulan x {len(tahun_pilih)} tahun = sampai {int(n_bt)} bulan per grid yang digabung (hanya bulan dengan SPI terisi).")
                 m1, m2, m3, m4 = st.columns(4)
                 fk, fb, ft = agg["p_kering"].mean(), agg["kering_model_pct"].mean(), agg["kering_target_pct"].mean()
                 m1.metric("Frekuensi kering yang diharapkan", f"{fk:.1f}%", f"{fk - fb:+.1f} pp vs baseline model sendiri", delta_color="off")
@@ -129,17 +138,18 @@ with tab_b:
                 kol, cmap, lim = {"Frekuensi kering (%)": ("p_kering", "YlOrBr", (0, 40)), "Selisih vs baseline model sendiri (pp)": ("selisih_pp", "BrBG_r", (-15, 15)), "SPI median rata-rata": ("spi", "BrBG", (-1, 1))}[ket]
                 cA, cB = st.columns(2)
                 fig, ax = plt.subplots(figsize=(6, 4.8)); sc = ax.scatter(agg["lon"], agg["lat"], c=agg[kol], cmap=cmap, marker="s", s=26, vmin=lim[0], vmax=lim[1])
-                plt.colorbar(sc, ax=ax, shrink=0.85); ax.set_aspect("equal"); ax.set_xlabel("bujur"); ax.set_ylabel("lintang"); ax.set_title(f"{skala} | {ket}\n{th0}-{th1}, {pilih if pilih != 'Pilih sendiri' else ', '.join(MON[b - 1] for b in bulan)}", fontsize=9)
+                plt.colorbar(sc, ax=ax, shrink=0.85); ax.set_aspect("equal"); ax.set_xlabel("bujur"); ax.set_ylabel("lintang"); ax.set_title(f"{skala} | {ket}\n{etiket_th}, {pilih if pilih != 'Pilih sendiri' else ', '.join(MON[b - 1] for b in bulan)}", fontsize=9)
                 cA.pyplot(fig)
                 per_th = gs.groupby("tahun")["p_kering"].mean() * 100
                 fig, ax = plt.subplots(figsize=(6, 4.8)); ax.bar(per_th.index, per_th.values, color="tab:blue", alpha=0.8)
                 ax.axhline(fb, color="gray", ls=":", label="baseline model sendiri (bulan sama)"); ax.axhline(ft, color="k", ls="--", lw=1, label=f"baseline {meta['target']}")
                 ax.set_xlabel("tahun"); ax.set_ylabel("frekuensi kering yang diharapkan (%)"); ax.set_title("Per tahun, bulan terpilih (rata-rata wilayah)", fontsize=9); ax.legend(fontsize=7); ax.grid(alpha=0.3)
                 cB.pyplot(fig)
-                x = rs["tahun"] + (rs["bulan"] - 1) / 12; ok = rs["bulan"].isin(bulan).to_numpy()
-                fig, ax = plt.subplots(figsize=(12, 3.6)); ax.plot(x, rs["spi_median"], color="lightgray", lw=0.8, label="semua bulan")
-                ax.fill_between(x, rs["spi_p10"], rs["spi_p90"], where=ok, alpha=0.3, label="p10-p90 antar-anggota (bulan terpilih)")
-                ax.scatter(x[ok], rs.loc[ok, "spi_median"], s=10, color="tab:blue", label="median (bulan terpilih)"); ax.axhline(-1, color="tab:red", ls="--", lw=0.8); ax.axhline(0, color="k", lw=0.5)
+                rt = regm.sort_values(["tahun", "bulan"]).reset_index(drop=True); thn = rt["tahun"].isin(tahun_pilih).to_numpy()
+                x = rt["tahun"] + (rt["bulan"] - 1) / 12; ok = rt["bulan"].isin(bulan).to_numpy() & thn
+                fig, ax = plt.subplots(figsize=(12, 3.6)); ax.plot(x, rt["spi_median"].where(thn), color="lightgray", lw=0.8, label="semua bulan (tahun terpilih)")
+                ax.fill_between(x, rt["spi_p10"], rt["spi_p90"], where=ok, alpha=0.3, label="p10-p90 antar-anggota (bulan terpilih)")
+                ax.scatter(x[ok], rt.loc[ok, "spi_median"], s=10, color="tab:blue", label="median (bulan terpilih)"); ax.axhline(-1, color="tab:red", ls="--", lw=0.8); ax.axhline(0, color="k", lw=0.5)
                 ax.set_ylabel(f"{skala} rata-rata wilayah"); ax.set_title("Deret SPI bulanan wilayah (median anggota); garis merah = ambang kering", fontsize=9); ax.legend(fontsize=7, ncol=3); ax.grid(alpha=0.3)
                 st.pyplot(fig)
                 st.caption("Makin banyak tahun dan bulan yang digabung, makin bermakna. Satu bulan atau satu tahun hanyalah satu realisasi GCM, bukan ramalan.")
