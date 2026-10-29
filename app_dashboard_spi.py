@@ -4,15 +4,19 @@ Sumber Google Drive (opsional): atur DRIVE_FOLDER_ID (env atau Streamlit secrets
 Berkas: dashboard_tahunan_regional.csv, dashboard_tahunan_per_grid.csv, dashboard_meta.json (14d)
         dashboard_bulanan_regional.csv.gz, dashboard_bulanan_per_grid.csv.gz, dashboard_baseline_bulan_grid.csv.gz, dashboard_grid.csv (14e)
 """
-import json, os
+import html, json, os
 import numpy as np, pandas as pd, streamlit as st
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Proyeksi SPI Banten 2026-2050", layout="wide")
 st.markdown("""<style>
-[data-testid="stMetric"] {background: rgba(13,91,214,0.10); border: 1.5px solid rgba(13,91,214,0.55); border-radius: 10px; padding: 12px 14px;}
-[data-testid="stMetricValue"] {font-weight: 800;}
-[data-testid="stMetricLabel"] p {font-weight: 600;}
+.kpi-grid {display: grid; gap: 12px; margin: 6px 0 12px 0;}
+.kpi-grid.k4 {grid-template-columns: repeat(4, 1fr);} .kpi-grid.k2 {grid-template-columns: repeat(2, 1fr);}
+@media (max-width: 900px) {.kpi-grid.k4 {grid-template-columns: repeat(2, 1fr);}}
+.kpi {background: rgba(13,91,214,0.10); border: 1.5px solid rgba(13,91,214,0.55); border-radius: 10px; padding: 12px 14px; min-height: 112px; display: flex; flex-direction: column; justify-content: space-between;}
+.kpi .l {font-size: 0.86rem; font-weight: 600; opacity: 0.85; line-height: 1.25;}
+.kpi .v {font-size: 1.95rem; font-weight: 800; line-height: 1.15; margin: 4px 0;}
+.kpi .s {font-size: 0.8rem; opacity: 0.75; line-height: 1.25;}
 button[data-baseweb="tab"] p {font-weight: 700; font-size: 1.02rem;}
 </style>""", unsafe_allow_html=True)
 MON = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
@@ -127,6 +131,13 @@ def peta(df, kol, judul, warna, zmin, zmax, satuan, label, extra=(), zmid=None, 
     fig.update_layout(title=dict(text=judul, font=dict(size=13)))
     return fig
 
+def kartu(label, nilai, sub=""):
+    e = html.escape
+    return f'<div class="kpi"><div class="l">{e(str(label))}</div><div class="v">{e(str(nilai))}</div><div class="s">{e(str(sub)) if sub else "&nbsp;"}</div></div>'
+
+def kpi_grid(daftar, kolom=4):
+    st.markdown(f'<div class="kpi-grid k{kolom}">' + "".join(daftar) + "</div>", unsafe_allow_html=True)
+
 # ---------------- kepala halaman ----------------
 st.title(f"Proyeksi kekeringan SPI Banten {meta['horizon'][0]}-{meta['horizon'][1]}")
 st.caption(f"{meta['gcm']} | {meta['skenario']} | target {meta['target']} | model: {meta['model']} (set {meta['set_fitur']}) | {meta['n_anggota_ensemble']} anggota ensemble")
@@ -143,9 +154,9 @@ tab1, tab2, tab_b, tab3 = st.tabs(["Wilayah per tahun", "Peta tahunan", "Bulanan
 # ---------------- tab 1: wilayah per tahun ----------------
 with tab1:
     st.caption("Ringkasan seluruh Banten per tahun: berapa persen grid-bulan yang kering (SPI <= -1), dengan pita sebaran antar-anggota ensemble.")
-    c1, c2, c3 = st.columns(3); rata = float(r["kering_pct_median"].mean())
-    c1.metric("Bulan kering rata-rata (median anggota)", f"{rata:.1f}%", f"{rata - base:+.1f} pp vs baseline model sendiri", delta_color="off")
-    c2.metric("Baseline model sendiri 1981-2010", f"{base:.1f}%"); c3.metric(f"Acuan {meta['target']} 1981-2010", f"{acuan:.1f}%")
+    rata = float(r["kering_pct_median"].mean())
+    kpi_grid([kartu("Bulan kering rata-rata", f"{rata:.1f}%", f"median anggota, {r['tahun'].nunique()} tahun"), kartu("Selisih vs baseline model", f"{rata - base:+.1f} pp", f"baseline model sendiri {base:.1f}%"),
+              kartu("Baseline model sendiri", f"{base:.1f}%", "1981-2010, tolok ukur model"), kartu(f"Acuan {meta['target']}", f"{acuan:.1f}%", "1981-2010, tolok ukur target")], 4)
     inc = (r["n_bulan_valid"] < 12).to_numpy(); roll = r.set_index("tahun")["kering_pct_median"].rolling(5, center=True, min_periods=3).mean()
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=r["tahun"], y=r["kering_pct_p10"], mode="lines", line=dict(width=0), name="p10", showlegend=False, hovertemplate="p10: %{y:.1f}%<extra></extra>"))
@@ -163,76 +174,89 @@ with tab1:
 ETIKET = {"spi_rata2": "SPI rata-rata tahunan", "kering_pct": "% bulan kering", "spi_des": "SPI Desember"}
 with tab2:
     st.caption("Peta per grid untuk satu tahun: lihat sebaran spasial kekeringan di Banten.")
-    cA, cB = st.columns([1, 2])
-    tahun = cA.selectbox("Tahun", sorted(grd["tahun"].unique().tolist()), key="tahun_peta")
-    besaran = cB.radio("Besaran", ["spi_rata2", "kering_pct", "spi_des"], horizontal=True, format_func=lambda v: ETIKET.get(v, v))
+    kp, kr = st.columns([1, 3], gap="medium")
+    with kp:
+        with st.container(border=True):
+            st.markdown("**Pilihan**")
+            tahun = st.selectbox("Tahun", sorted(grd["tahun"].unique().tolist()), key="tahun_peta")
+            besaran = st.radio("Besaran peta", ["spi_rata2", "kering_pct", "spi_des"], format_func=lambda v: ETIKET.get(v, v), key="besaran_peta")
     g = grd[(grd["SPI"] == skala) & (grd["tahun"] == tahun)].dropna(subset=[besaran])
-    if g.empty: st.warning("Tidak ada nilai untuk pilihan ini (mis. SPI Desember pada skala yang belum terisi).")
-    elif besaran == "kering_pct": tampil(peta(g, besaran, f"{skala}, {tahun}: % bulan kering (median anggota)", "YlOrRd", 0, 100, "%", ETIKET[besaran], gaya=gaya), 540)
-    else: tampil(peta(g, besaran, f"{skala}, {tahun}: {ETIKET[besaran]} (median anggota)", "BrBG", -2, 2, "", ETIKET[besaran], zmid=0, gaya=gaya), 540)
+    gv = grd[(grd["SPI"] == skala) & (grd["tahun"] == tahun)].dropna(subset=["spi_rata2"]); rr = r[r["tahun"] == tahun]
+    with kr:
+        if not rr.empty and not gv.empty:
+            x = rr.iloc[0]; kering, basah = gv.loc[gv["spi_rata2"].idxmin()], gv.loc[gv["spi_rata2"].idxmax()]
+            kpi_grid([kartu("Bulan kering wilayah", f"{x['kering_pct_median']:.1f}%", f"p10-p90: {x['kering_pct_p10']:.1f}-{x['kering_pct_p90']:.1f}%"), kartu("SPI rata-rata wilayah", f"{x['spi_rata2_median']:+.2f}", f"p10-p90: {x['spi_rata2_p10']:+.2f} sampai {x['spi_rata2_p90']:+.2f}"),
+                      kartu("Grid paling kering", f"{kering['spi_rata2']:+.2f}", f"bujur {kering['lon']:.2f}, lintang {kering['lat']:.2f}"), kartu("Grid paling basah", f"{basah['spi_rata2']:+.2f}", f"bujur {basah['lon']:.2f}, lintang {basah['lat']:.2f}")], 4)
+        if g.empty: st.warning("Tidak ada nilai untuk pilihan ini (mis. SPI Desember pada skala yang belum terisi).")
+        elif besaran == "kering_pct": tampil(peta(g, besaran, f"{skala}, {tahun}: % bulan kering (median anggota)", "YlOrRd", 0, 100, "%", ETIKET[besaran], gaya=gaya), 540)
+        else: tampil(peta(g, besaran, f"{skala}, {tahun}: {ETIKET[besaran]} (median anggota)", "BrBG", -2, 2, "", ETIKET[besaran], zmid=0, gaya=gaya), 540)
 
 # ---------------- tab 3: bulanan & agregasi ----------------
+KET_PETA = ["Frekuensi kering (%)", "Selisih vs baseline model sendiri (pp)", "SPI median rata-rata"]
 with tab_b:
-    st.caption("Pilih tahun dan bulan yang ingin digabung, lalu lihat frekuensi kering yang diharapkan di peta, per tahun, per bulan kalender, dan sebagai deret bulanan.")
+    st.caption("Pilih tahun dan bulan yang ingin digabung di panel kiri; ringkasan dan empat grafik mengikuti pilihanmu.")
     if bln is None:
         st.info("Ekspor bulanan belum ada. Jalankan sel 14e notebook (menghasilkan dashboard_bulanan_*.csv.gz, dashboard_baseline_bulan_grid.csv.gz, dashboard_grid.csv).")
     else:
         regm, grdm, basem, grid = bln
         regm, grdm, basem = (d[d["SPI"] == skala] for d in (regm, grdm, basem))
         daftar_th = sorted(regm["tahun"].unique().tolist())
-        k1, k2 = st.columns([1, 2])
-        mode_th = k1.radio("Pilih tahun", ["Rentang (dari - sampai)", "Tahun tertentu"], horizontal=True, key="mode_th")
-        if mode_th.startswith("Rentang"):
-            ca, cb = k1.columns(2)
-            th0 = ca.selectbox("Dari", daftar_th, index=0, key="th_dari"); th1 = cb.selectbox("Sampai", daftar_th, index=len(daftar_th) - 1, key="th_sampai")
-            tahun_pilih = [t for t in daftar_th if th0 <= t <= th1]
+        kp, kr = st.columns([1, 2], gap="medium")
+        with kp:
+            with st.container(border=True):
+                st.markdown("**Pilihan**")
+                mode_th = st.radio("Pilih tahun", ["Rentang (dari - sampai)", "Tahun tertentu"], key="mode_th")
+                if mode_th.startswith("Rentang"):
+                    ca, cb = st.columns(2)
+                    th0 = ca.selectbox("Dari", daftar_th, index=0, key="th_dari"); th1 = cb.selectbox("Sampai", daftar_th, index=len(daftar_th) - 1, key="th_sampai")
+                    tahun_pilih = [t for t in daftar_th if th0 <= t <= th1]
+                else:
+                    tahun_pilih = sorted(st.multiselect("Tahun", daftar_th, default=daftar_th[:5], key="th_multi"))
+                pilih = st.selectbox("Bulan / musim", list(PRESET), key="bulan_preset")
+                bulan = PRESET[pilih] if PRESET[pilih] is not None else [MON.index(m) + 1 for m in st.multiselect("Pilih bulan", MON, default=MON[5:9], key="bulan_multi")]
+                ket = st.selectbox("Besaran peta", KET_PETA, key="besaran_b")
+        gs = grdm[grdm["tahun"].isin(tahun_pilih) & grdm["bulan"].isin(bulan)] if (bulan and tahun_pilih) else grdm.iloc[0:0]
+        if not bulan or not tahun_pilih or gs.empty:
+            with kr:
+                if not bulan: st.warning("Pilih minimal satu bulan.")
+                elif not tahun_pilih: st.warning("Pilih minimal satu tahun (untuk rentang: 'Sampai' tidak boleh lebih awal dari 'Dari').")
+                else: st.warning("Tidak ada data untuk pilihan ini (mis. SPI-12 belum terisi pada bulan awal 2026).")
         else:
-            tahun_pilih = sorted(k1.multiselect("Tahun", daftar_th, default=daftar_th[:5], key="th_multi"))
-        pilih = k2.radio("Bulan", list(PRESET), horizontal=True)
-        bulan = PRESET[pilih] if PRESET[pilih] is not None else [MON.index(m) + 1 for m in k2.multiselect("Pilih bulan", MON, default=MON[5:9])]
-        if not bulan: st.warning("Pilih minimal satu bulan.")
-        elif not tahun_pilih: st.warning("Pilih minimal satu tahun (untuk rentang: 'Sampai' tidak boleh lebih awal dari 'Dari').")
-        else:
-            sel = lambda d: d[d["tahun"].isin(tahun_pilih) & d["bulan"].isin(bulan)]
-            gs = sel(grdm)
             etiket_th = f"{tahun_pilih[0]}-{tahun_pilih[-1]}" if tahun_pilih[-1] - tahun_pilih[0] + 1 == len(tahun_pilih) else f"{len(tahun_pilih)} tahun terpilih ({tahun_pilih[0]}...{tahun_pilih[-1]})"
             etiket_bl = pilih if pilih != "Pilih sendiri" else ", ".join(MON[b - 1] for b in bulan)
-            if gs.empty:
-                st.warning("Tidak ada data untuk pilihan ini (mis. SPI-12 belum terisi pada bulan awal 2026).")
-            else:
-                agg = gs.groupby("grid_id").agg(p_kering=("p_kering", "mean"), p_sangat=("p_sangat_kering", "mean"), spi=("spi_median", "mean")).reset_index(); agg[["p_kering", "p_sangat"]] *= 100
-                bs = basem[basem["bulan"].isin(bulan)].groupby("grid_id")[["kering_model_pct", "kering_target_pct"]].mean().reset_index()
-                agg = agg.merge(bs, on="grid_id").merge(grid, on="grid_id"); agg["selisih_pp"] = agg["p_kering"] - agg["kering_model_pct"]
-                st.caption(f"{len(bulan)} bulan x {len(tahun_pilih)} tahun = sampai {int(gs.groupby('grid_id').size().max())} bulan per grid yang digabung (hanya bulan dengan SPI terisi).")
-                m1, m2, m3, m4 = st.columns(4); fk, fb, ft = agg["p_kering"].mean(), agg["kering_model_pct"].mean(), agg["kering_target_pct"].mean()
-                m1.metric("Frekuensi kering yang diharapkan", f"{fk:.1f}%", f"{fk - fb:+.1f} pp vs baseline model sendiri", delta_color="off")
-                m2.metric("Baseline model sendiri (bulan sama, 1981-2010)", f"{fb:.1f}%"); m3.metric(f"Baseline {meta['target']} (bulan sama)", f"{ft:.1f}%"); m4.metric("Sangat kering (SPI <= -1,5)", f"{agg['p_sangat'].mean():.1f}%")
-                ket = st.radio("Besaran peta", ["Frekuensi kering (%)", "Selisih vs baseline model sendiri (pp)", "SPI median rata-rata"], horizontal=True)
-                ekstra = [("Baseline model sendiri", "kering_model_pct", "%"), (f"Baseline {meta['target']}", "kering_target_pct", "%"), ("Sangat kering", "p_sangat", "%")]
-                jd = f"{skala} | {ket} | {etiket_th}, {etiket_bl}"
-                cA, cB = st.columns(2)
-                with cA:
-                    if ket.startswith("Frekuensi"): z0, z1 = batas_skala(agg["p_kering"], "pos"); fg = peta(agg, "p_kering", jd, "YlOrRd", z0, z1, "%", "Frekuensi kering", ekstra, gaya=gaya)
-                    elif ket.startswith("Selisih"): z0, z1 = batas_skala(agg["selisih_pp"], "pp"); fg = peta(agg, "selisih_pp", jd, "RdBu_r", z0, z1, " pp", "Selisih vs baseline", ekstra, zmid=0, gaya=gaya)
-                    else: z0, z1 = batas_skala(agg["spi"], "spi"); fg = peta(agg, "spi", jd, "BrBG", z0, z1, "", "SPI median", ekstra, zmid=0, gaya=gaya)
-                    tampil(fg, 480); st.caption(f"Skala warna menyesuaikan sebaran data ({z0:g} sampai {z1:g}).")
-                with cB:
-                    per_th = gs.groupby("tahun")["p_kering"].mean() * 100
-                    fig = go.Figure(go.Bar(x=per_th.index, y=per_th.values, marker_color=BIRU, name="frekuensi kering yang diharapkan", hovertemplate="Tahun %{x}<br><b>%{y:.1f}%</b> bulan kering<extra></extra>"))
-                    garis_acuan(fig, list(per_th.index), fb, "baseline model sendiri (bulan sama)", C_BASE, "dot"); garis_acuan(fig, list(per_th.index), ft, f"baseline {meta['target']}", C_TARGET, "dash")
-                    fig.update_layout(title="Per tahun, bulan terpilih (rata-rata wilayah)", xaxis_title="tahun", yaxis_title="% bulan kering", hovermode="x unified"); tampil(fig, 480)
-                # profil bulan kalender (tahun terpilih, semua bulan; bulan terpilih diberi warna) + kisaran acak kasar di sekitar baseline
+            agg = gs.groupby("grid_id").agg(p_kering=("p_kering", "mean"), p_sangat=("p_sangat_kering", "mean"), spi=("spi_median", "mean")).reset_index(); agg[["p_kering", "p_sangat"]] *= 100
+            bs = basem[basem["bulan"].isin(bulan)].groupby("grid_id")[["kering_model_pct", "kering_target_pct"]].mean().reset_index()
+            agg = agg.merge(bs, on="grid_id").merge(grid, on="grid_id"); agg["selisih_pp"] = agg["p_kering"] - agg["kering_model_pct"]
+            fk, fb, ft = agg["p_kering"].mean(), agg["kering_model_pct"].mean(), agg["kering_target_pct"].mean(); n_bt = int(gs.groupby("grid_id").size().max())
+            with kr:
+                st.caption(f"Periode terpilih: {etiket_th} | {etiket_bl} | {len(bulan)} bulan x {len(tahun_pilih)} tahun = sampai {n_bt} bulan per grid (hanya bulan dengan SPI terisi).")
+                kpi_grid([kartu("Frekuensi kering diharapkan", f"{fk:.1f}%", f"{fk - fb:+.1f} pp vs baseline model sendiri"), kartu("Baseline model sendiri", f"{fb:.1f}%", "bulan sama, 1981-2010"),
+                          kartu(f"Baseline {meta['target']}", f"{ft:.1f}%", "bulan sama, 1981-2010"), kartu("Sangat kering (SPI <= -1,5)", f"{agg['p_sangat'].mean():.1f}%", f"dari {n_bt} bulan per grid")], 2)
+            ekstra = [("Baseline model sendiri", "kering_model_pct", "%"), (f"Baseline {meta['target']}", "kering_target_pct", "%"), ("Sangat kering", "p_sangat", "%")]
+            jd = f"{skala} | {ket} | {etiket_th}, {etiket_bl}"
+            cA, cB = st.columns(2, gap="medium")
+            with cA:
+                if ket.startswith("Frekuensi"): z0, z1 = batas_skala(agg["p_kering"], "pos"); fg = peta(agg, "p_kering", jd, "YlOrRd", z0, z1, "%", "Frekuensi kering", ekstra, gaya=gaya)
+                elif ket.startswith("Selisih"): z0, z1 = batas_skala(agg["selisih_pp"], "pp"); fg = peta(agg, "selisih_pp", jd, "RdBu_r", z0, z1, " pp", "Selisih vs baseline", ekstra, zmid=0, gaya=gaya)
+                else: z0, z1 = batas_skala(agg["spi"], "spi"); fg = peta(agg, "spi", jd, "BrBG", z0, z1, "", "SPI median", ekstra, zmid=0, gaya=gaya)
+                tampil(fg, 460); st.caption(f"Skala warna menyesuaikan sebaran data ({z0:g} sampai {z1:g}).")
+            with cB:
+                per_th = gs.groupby("tahun")["p_kering"].mean() * 100
+                fig = go.Figure(go.Bar(x=per_th.index, y=per_th.values, marker_color=BIRU, name="frekuensi kering yang diharapkan", hovertemplate="Tahun %{x}<br><b>%{y:.1f}%</b> bulan kering<extra></extra>"))
+                garis_acuan(fig, list(per_th.index), fb, "baseline model sendiri (bulan sama)", C_BASE, "dot"); garis_acuan(fig, list(per_th.index), ft, f"baseline {meta['target']}", C_TARGET, "dash")
+                fig.update_layout(title="Per tahun, bulan terpilih (rata-rata wilayah)", xaxis_title="tahun", yaxis_title="% bulan kering", hovermode="x unified"); tampil(fig, 460)
+            cC, cD = st.columns(2, gap="medium")
+            with cC:
                 gt = grdm[grdm["tahun"].isin(tahun_pilih)]; prof = gt.groupby("bulan")["p_kering"].mean() * 100; bb = basem.groupby("bulan")[["kering_model_pct", "kering_target_pct"]].mean()
                 nm = [MON[b - 1] for b in bb.index]; pbase = (bb["kering_model_pct"] / 100).clip(0.001, 0.999); se2 = 200 * np.sqrt(pbase * (1 - pbase) / len(tahun_pilih))
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=nm, y=(bb["kering_model_pct"] - se2).clip(lower=0), mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-                fig.add_trace(go.Scatter(x=nm, y=bb["kering_model_pct"] + se2, mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(128,128,128,0.28)", name=f"kisaran acak baseline (±2 SE, {len(tahun_pilih)} tahun; perkiraan kasar)", hoverinfo="skip"))
+                fig.add_trace(go.Scatter(x=nm, y=bb["kering_model_pct"] + se2, mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(128,128,128,0.28)", name=f"kisaran acak baseline (±2 SE, {len(tahun_pilih)} tahun; kasar)", hoverinfo="skip"))
                 fig.add_trace(go.Bar(x=[MON[b - 1] for b in prof.index], y=prof.values, marker_color=[BIRU if b in bulan else C_ABU for b in prof.index], name="proyeksi (tahun terpilih)", hovertemplate="%{x}<br><b>%{y:.1f}%</b> bulan kering<extra></extra>"))
                 fig.add_trace(go.Scatter(x=nm, y=bb["kering_model_pct"], mode="lines+markers", line=dict(color=C_BASE, dash="dot", width=3), marker=dict(size=7), name="baseline model sendiri 1981-2010", hovertemplate="%{x}: %{y:.1f}%<extra>baseline model</extra>"))
                 fig.add_trace(go.Scatter(x=nm, y=bb["kering_target_pct"], mode="lines+markers", line=dict(color=C_TARGET, dash="dash", width=3), marker=dict(size=7), name=f"baseline {meta['target']} 1981-2010", hovertemplate="%{x}: %{y:.1f}%<extra>baseline target</extra>"))
-                fig.update_layout(title="Profil per bulan kalender (bulan terpilih berwarna biru)", xaxis_title="bulan", yaxis_title="% bulan kering", hovermode="x unified"); tampil(fig, 400)
-                st.caption("Batang di luar pita abu-abu menyimpang lebih dari kisaran acak sampel, tetapi itu belum berarti sinyal iklim: bisa berasal dari variabilitas internal GCM pada satu lintasan atau dari prediktor. Dengan banyak bulan yang dibandingkan sekaligus, beberapa penyimpangan memang diharapkan muncul.")
-                # deret bulanan wilayah
+                fig.update_layout(title="Profil per bulan kalender (bulan terpilih berwarna biru)", xaxis_title="bulan", yaxis_title="% bulan kering", hovermode="x unified"); tampil(fig, 460)
+            with cD:
                 rt = regm.sort_values(["tahun", "bulan"]).reset_index(drop=True); thn = rt["tahun"].isin(tahun_pilih).to_numpy(); ok = rt["bulan"].isin(bulan).to_numpy() & thn
                 tgl = pd.to_datetime(dict(year=rt["tahun"], month=rt["bulan"], day=1)); sub = rt[ok]
                 fig = go.Figure()
@@ -241,8 +265,8 @@ with tab_b:
                                          error_y=dict(type="data", symmetric=False, array=(sub["spi_p90"] - sub["spi_median"]).to_numpy(), arrayminus=(sub["spi_median"] - sub["spi_p10"]).to_numpy(), color="rgba(13,91,214,0.55)", thickness=1.6, width=0),
                                          customdata=np.c_[sub["spi_p10"], sub["spi_p90"]], hovertemplate="%{x|%b %Y}<br><b>median %{y:.2f}</b><br>p10 %{customdata[0]:.2f} | p90 %{customdata[1]:.2f}<extra></extra>"))
                 fig.add_hline(y=-1, line_dash="dash", line_width=2.5, line_color="#e53935", annotation_text="ambang kering (-1)", annotation_position="bottom right"); fig.add_hline(y=0, line_color="#888", line_width=1)
-                fig.update_layout(title=f"Deret SPI bulanan wilayah ({skala}, median anggota; garis tegak = p10-p90)", yaxis_title=f"{skala} rata-rata wilayah", hovermode="closest"); tampil(fig, 380)
-                st.caption("Makin banyak tahun dan bulan yang digabung, makin bermakna. Satu bulan atau satu tahun hanyalah satu realisasi GCM, bukan ramalan.")
+                fig.update_layout(title=f"Deret SPI bulanan wilayah ({skala}; garis tegak = p10-p90)", yaxis_title=f"{skala} rata-rata wilayah", hovermode="closest"); tampil(fig, 460)
+            st.caption("Batang profil di luar pita abu-abu menyimpang lebih dari kisaran acak sampel, tetapi itu belum berarti sinyal iklim: bisa berasal dari variabilitas internal GCM pada satu lintasan atau dari prediktor. Makin banyak tahun dan bulan yang digabung, makin bermakna; satu bulan atau satu tahun hanyalah satu realisasi GCM, bukan ramalan.")
 
 # ---------------- tab 4: cara membaca ----------------
 with tab3:
