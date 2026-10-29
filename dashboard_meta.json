@@ -1,0 +1,78 @@
+{
+  "gcm": "CMCC-ESM2",
+  "skenario": "SSP370 (satu anggota)",
+  "target": "CHIRPS",
+  "model": "P: Neural Net [mu+V1]",
+  "set_fitur": "P2",
+  "status_gerbang": "lolos gerbang penuh",
+  "horizon": [
+    2026,
+    2050
+  ],
+  "n_anggota_ensemble": 20,
+  "spi_skala": [
+    "SPI-3",
+    "SPI-6",
+    "SPI-12"
+  ],
+  "ambang_kering": -1.0,
+  "acuan_target_pct": {
+    "SPI-3": 16.180661362225607,
+    "SPI-6": 15.150092474036136,
+    "SPI-12": 15.228936933807994
+  },
+  "baseline_model_sendiri_pct": {
+    "SPI-3": 17.76920743750353,
+    "SPI-6": 17.136114667804808,
+    "SPI-12": 16.405350062226855
+  },
+  "baris_prediktor_luar_rentang_pct": {
+    "2026-2050": 14.000000000000002,
+    "2051-2075": 56.333333333333336,
+    "2076-2100": 78.33333333333333
+  },
+  "gerbang": {
+    "GLM Gamma": {
+      "a": false,
+      "b": false,
+      "c": false
+    },
+    "Random Forest": {
+      "a": true,
+      "b": true,
+      "c": false
+    },
+    "XGBoost": {
+      "a": true,
+      "b": false,
+      "c": false
+    },
+    "Neural Net": {
+      "a": true,
+      "b": true,
+      "c": true
+    }
+  },
+  "catatan": [
+    "Satu GCM, satu skenario, satu anggota: proyeksi bersyarat skenario, bukan prediksi.",
+    "Nilai satu tahun adalah satu realisasi variabilitas, bukan ramalan tahun itu: GCM free-running tidak sefase dengan kejadian nyata.",
+    "Pita p10-p90 = sebaran antar-anggota ensemble dari satu model; tidak mencakup ketidakpastian model, skenario, atau GCM lain.",
+    "Status model: lolos gerbang penuh. Baca perubahan terhadap baseline model sendiri, bukan nilai mutlak.",
+    "Tahun awal deret: k-1 bulan pertama SPI-k kosong (lihat n_bulan_valid).",
+    "Pola tahun/bulan kering pada deret berasal dari variabilitas internal GCM (mirip ENSO) pada satu lintasan, bukan prediksi kejadian nyata; agregasi banyak tahun/bulan lebih bermakna daripada satu bulan.",
+    "Peluang kering = porsi anggota ensemble dengan SPI <= -1. Pita antar-anggota sempit karena hanya derau di sekitar mu yang sama; bukan ukuran ketidakpastian iklim."
+  ],
+  "bulanan": {
+    "berkas": [
+      "dashboard_bulanan_regional.csv.gz",
+      "dashboard_bulanan_per_grid.csv.gz",
+      "dashboard_baseline_bulan_grid.csv.gz",
+      "dashboard_grid.csv"
+    ],
+    "baseline_periode": [
+      1981,
+      2010
+    ],
+    "n_anggota": 20
+  }
+}
