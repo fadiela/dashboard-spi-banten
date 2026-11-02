@@ -3,7 +3,7 @@ Jalankan:  HASIL_DIR=/jalur/ke/folder streamlit run app_dashboard_spi.py
 Sumber Google Drive (opsional): atur DRIVE_FOLDER_ID (env atau Streamlit secrets) = ID folder Drive yang dibagikan 'siapa saja dengan link'.
 Berkas wajib: dashboard_tahunan_regional.csv, dashboard_tahunan_per_grid.csv, dashboard_meta.json (14d)
               dashboard_bulanan_regional.csv.gz, dashboard_bulanan_per_grid.csv.gz, dashboard_baseline_bulan_grid.csv.gz, dashboard_grid.csv (14e)
-Berkas opsional: banten_kabkota.geojson (batas kabupaten/kota; diletakkan di folder hasil atau di sebelah berkas .py ini). Tanpa berkas ini peta tetap jalan, hanya tanpa garis batas dan nama wilayah.
+Berkas opsional: dashboard_korelasi.csv, dashboard_korelasi_antar.csv (14g; tab Korelasi & validasi), banten_kabkota.geojson (batas kabupaten/kota; diletakkan di folder hasil atau di sebelah berkas .py ini). Tanpa berkas ini peta tetap jalan, hanya tanpa garis batas dan nama wilayah.
 """
 import html, json, os
 import numpy as np, pandas as pd, streamlit as st
@@ -94,6 +94,12 @@ def muat_bulanan(folder, versi=()):
     if not all(os.path.exists(jalur(folder, n)) for n in nama): return None
     return tuple(pd.read_csv(jalur(folder, n)) for n in nama)
 
+@st.cache_data
+def muat_korelasi(folder, versi=()):
+    pk, pa = os.path.join(folder, "dashboard_korelasi.csv"), os.path.join(folder, "dashboard_korelasi_antar.csv")
+    if not os.path.exists(pk): return None, None
+    return pd.read_csv(pk), (pd.read_csv(pa) if os.path.exists(pa) else None)
+
 def _dalam_cincin(px, py, ring):
     """Uji titik-dalam-poligon (even-odd) untuk banyak titik sekaligus; ring = array (n, 2) berisi bujur, lintang."""
     x, y = ring[:, 0], ring[:, 1]; x2, y2 = np.roll(x, -1), np.roll(y, -1); dalam = np.zeros(px.shape, bool)
@@ -131,6 +137,7 @@ try:
 except FileNotFoundError as e:
     st.error(f"Berkas ekspor tidak ditemukan di '{folder}'. Jalankan sel 14d notebook dulu. ({e.filename})"); st.stop()
 bln = muat_bulanan(folder, versi_folder(folder))
+kor, kor_antar = muat_korelasi(folder, versi_folder(folder))
 grid_ref = grd[["grid_id", "lat", "lon"]].drop_duplicates().sort_values("grid_id").reset_index(drop=True)
 gj, wil_tab, wil_label = muat_wilayah(folder, versi_folder(folder), grid_ref)
 
@@ -243,7 +250,9 @@ with slot_skala:
     st.caption(SKALA_INFO.get(skala, ("", ""))[1])
 
 r = reg[reg["SPI"] == skala].sort_values("tahun"); base = float(meta["baseline_model_sendiri_pct"][skala]); acuan = float(meta["acuan_target_pct"][skala])
-rata = float(np.average(r["kering_pct_median"], weights=r["n_bulan_valid"])); sel = rata - base; kode, kalimat = tafsir(sel, se_kasar(r["kering_pct_median"]))
+KOL_RATA = "kering_pct_mean" if "kering_pct_mean" in r.columns else "kering_pct_median"      # rata-rata antar-simulasi, definisi yang sama dengan ringkasan notebook (15b)
+rata_nb = (meta.get("proyeksi_pct") or {}).get(skala)
+rata = float(rata_nb) if rata_nb is not None else float(np.average(r[KOL_RATA], weights=r["n_bulan_valid"])); sel = rata - base; kode, kalimat = tafsir(sel, se_kasar(r[KOL_RATA]))
 
 st.title(f"Proyeksi kekeringan Banten {h0}-{h1}")
 st.caption(f"Berdasarkan model iklim global {meta['gcm']} (skenario {meta['skenario']}), diperhalus ke skala lokal Banten dengan model {meta['model']} dan dikalibrasi ke data hujan {meta['target']}.")
@@ -255,7 +264,7 @@ if luar is not None: lencana_html += lencana(f"Data masukan di luar rentang lati
 lencana_html += lencana(f"1 model iklim · 1 skenario · {meta['n_anggota_ensemble']} simulasi", "info")
 st.markdown(lencana_html, unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["Ringkasan", "Peta & musim", "Panduan & metode"])
+tab1, tab2, tab_k, tab3 = st.tabs(["Ringkasan", "Peta & musim", "Korelasi & validasi", "Panduan & metode"])
 
 # ---------------- tab 1: ringkasan ----------------
 with tab1:
@@ -266,7 +275,7 @@ with tab1:
                     "- **Dibandingkan dengan apa?** Garis abu-abu = kondisi 1981-2010 menurut model yang sama. Kalau grafik berada di atas garis itu, bulan kering lebih sering; di bawahnya, lebih jarang.\n"
                     "- **Jangan baca satu tahun sebagai ramalan.** Naik-turun dari tahun ke tahun adalah variasi alami model, bukan prediksi kejadian tahun itu. Lihat kecenderungan jangka panjang (garis oranye) dan rata-rata banyak tahun.\n"
                     "- **Mau lihat per wilayah atau per musim?** Buka tab *Peta & musim*.")
-    kpi_grid([kartu(f"Bulan kering rata-rata {h0}-{h1}", f"{n(rata)}%", f"{r['tahun'].nunique()} tahun, median simulasi"), kartu("Kondisi 1981-2010 (menurut model)", f"{n(base)}%", "pembanding utama"),
+    kpi_grid([kartu(f"Bulan kering rata-rata {h0}-{h1}", f"{n(rata)}%", f"{r['tahun'].nunique()} tahun, rata-rata simulasi"), kartu("Kondisi 1981-2010 (menurut model)", f"{n(base)}%", "pembanding utama"),
               kartu("Selisih", f"{n(sel, 1, True)} poin", KET_KODE[kode])], 3)
 
     st.markdown("##### Frekuensi bulan kering per tahun")
@@ -288,8 +297,8 @@ with tab1:
     st.markdown("##### Apakah makin kering? Bandingkan dua periode")
     mid_def = h0 + (h1 - h0 + 1) // 2; pisah = st.slider("Bagi periode proyeksi di tahun", h0 + 3, h1 - 3, mid_def, help="Periode awal = sampai tahun sebelum tahun ini; periode akhir = mulai tahun ini.")
     ra, rb = r[r["tahun"] < pisah], r[r["tahun"] >= pisah]
-    ma, mb_ = float(np.average(ra["kering_pct_median"], weights=ra["n_bulan_valid"])), float(np.average(rb["kering_pct_median"], weights=rb["n_bulan_valid"]))
-    se_ab = float(np.sqrt(se_kasar(ra["kering_pct_median"]) ** 2 + se_kasar(rb["kering_pct_median"]) ** 2)); k2, t2 = tafsir(mb_ - ma, se_ab)
+    ma, mb_ = float(np.average(ra[KOL_RATA], weights=ra["n_bulan_valid"])), float(np.average(rb[KOL_RATA], weights=rb["n_bulan_valid"]))
+    se_ab = float(np.sqrt(se_kasar(ra[KOL_RATA]) ** 2 + se_kasar(rb[KOL_RATA]) ** 2)); k2, t2 = tafsir(mb_ - ma, se_ab)
     la, lb = f"{h0}-{pisah - 1}", f"{pisah}-{h1}"
     fig = go.Figure(go.Bar(x=["Kondisi 1981-2010 (model)", la, lb], y=[base, ma, mb_], marker_color=[C_BASE, "#5bb5b6", TEAL], text=[f"{n(v)}%" for v in (base, ma, mb_)], textposition="outside", cliponaxis=False,
                            hovertemplate="%{x}<br><b>%{y:.1f}%</b> bulan kering<extra></extra>"))
@@ -297,13 +306,13 @@ with tab1:
     st.markdown(f"Periode akhir ({lb}) **{n(mb_)}%** vs periode awal ({la}) **{n(ma)}%**: selisih **{n(mb_ - ma, 1, True)} poin**. " + t2.replace("daripada kondisi 1981-2010", "daripada periode awal"))
     st.caption("Perbandingan ini dari satu lintasan model iklim, jadi bisa dipengaruhi variasi alami model (mirip ENSO) dan sebaiknya tidak dibaca sebagai kepastian tren.")
 
-    dl = r[["tahun", "n_bulan_valid", "kering_pct_p10", "kering_pct_median", "kering_pct_p90", "spi_rata2_median"]].rename(columns={"n_bulan_valid": "jumlah_bulan_valid", "kering_pct_p10": "bulan_kering_pct_p10", "kering_pct_median": "bulan_kering_pct_median", "kering_pct_p90": "bulan_kering_pct_p90", "spi_rata2_median": "spi_rata2_median"})
+    dl = r[[c for c in ["tahun", "n_bulan_valid", "kering_pct_p10", "kering_pct_mean", "kering_pct_median", "kering_pct_p90", "spi_rata2_median"] if c in r.columns]].rename(columns={"n_bulan_valid": "jumlah_bulan_valid", "kering_pct_p10": "bulan_kering_pct_p10", "kering_pct_mean": "bulan_kering_pct_rata2", "kering_pct_median": "bulan_kering_pct_median", "kering_pct_p90": "bulan_kering_pct_p90"})
     st.download_button("Unduh tabel tahunan (CSV)", dl.to_csv(index=False).encode("utf-8-sig"), file_name=f"proyeksi_kering_banten_{skala}.csv", mime="text/csv")
 
     with st.expander("Detail untuk peneliti: ketiga skala SPI dan pembanding data pengamatan"):
         rows = []
         for s in meta["spi_skala"]:
-            d = reg[reg["SPI"] == s]; pr = float(np.average(d["kering_pct_median"], weights=d["n_bulan_valid"])); b_, a_ = float(meta["baseline_model_sendiri_pct"][s]), float(meta["acuan_target_pct"][s])
+            d = reg[reg["SPI"] == s]; pr = float((meta.get("proyeksi_pct") or {}).get(s, np.average(d["kering_pct_mean" if "kering_pct_mean" in d.columns else "kering_pct_median"], weights=d["n_bulan_valid"]))); b_, a_ = float(meta["baseline_model_sendiri_pct"][s]), float(meta["acuan_target_pct"][s])
             rows.append({"Skala": s, f"Proyeksi {h0}-{h1} (%)": round(pr, 1), "Baseline model 1981-2010 (%)": round(b_, 1), f"Acuan {meta['target']} 1981-2010 (%)": round(a_, 1), "Proyeksi - baseline model (poin)": round(pr - b_, 1)})
         st.dataframe(pd.DataFrame(rows).set_index("Skala"))
         st.caption("Baca perubahan terhadap baseline model sendiri (kolom ketiga), bukan terhadap data pengamatan, karena model punya bias tersendiri; perbandingan yang adil adalah model dengan model.")
@@ -351,7 +360,7 @@ with tab2:
                 st.success(f"**{etiket_bl}, {etiket_th} ({skala}):** sekitar **{n(fk)}%** bulan diproyeksikan kering, dibanding **{n(fb)}%** pada 1981-2010 (selisih {n(sel_b, 1, True)} poin). {kal_b}" + (" Makin sedikit tahun dan bulan yang dipilih, makin kuat pengaruh variasi acak model." if len(tahun_pilih) * len(bulan) < 36 else ""))
                 kpi_grid([kartu("Bulan kering diproyeksikan", f"{n(fk)}%", f"dari {n_bt} bulan per grid"), kartu("Kondisi 1981-2010 (model)", f"{n(fb)}%", "bulan yang sama"),
                           kartu("Selisih", f"{n(sel_b, 1, True)} poin", KET_KODE[kb]), kartu("Sangat kering (SPI <= -1,5)", f"{n(agg['p_sangat'].mean())}%", "dari bulan yang dipilih")], 2)
-                st.caption("Angka di tab ini = peluang kering rata-rata dari semua simulasi, jadi bisa berbeda sedikit dari tab Ringkasan (median simulasi).")
+                st.caption("Angka di tab ini = peluang kering rata-rata dari semua simulasi, definisi yang sama dengan tab Ringkasan dan ringkasan akhir notebook.")
                 if dalam_saja: st.caption(f"Angka di tab ini hanya dari {len(agg)} grid di dalam batas Banten; angka di tab Ringkasan memakai semua grid.")
             ekstra = [("Kondisi 1981-2010 (model)", "kering_model_pct", "%"), (f"Data pengamatan {meta['target']}", "kering_target_pct", "%"), ("Sangat kering", "p_sangat", "%")]
             jd = f"{skala} | {ket} | {etiket_th}, {etiket_bl}"; mode_k = KET_PETA[ket][1]
@@ -430,6 +439,47 @@ with tab2:
                     fig.add_hline(y=-1, line_dash="dash", line_width=2.5, line_color="#e53935"); fig.add_hline(y=0, line_color="#888", line_width=1); fig.update_yaxes(range=[ylo, yhi])
                     fig.update_layout(title=f"Deret SPI bulanan wilayah ({skala}; garis tegak = p10-p90)", yaxis_title=f"{skala} rata-rata wilayah", hovermode="closest"); tampil(fig, 460)
                     st.caption("Pita warna = kategori SPI (garis merah putus-putus = ambang kering, -1). Satu titik = satu bulan dalam satu lintasan GCM, bukan ramalan bulan itu.")
+
+# ---------------- tab korelasi & validasi ----------------
+with tab_k:
+    if kor is None:
+        st.info("Berkas korelasi belum ada. Jalankan sel 14g notebook (v16), lalu dorong ke GitHub lewat sel 14f.")
+    else:
+        mk = meta.get("korelasi", {}); rk = float(kor["r_kritis_p05"].iloc[0]); nm_model = mk.get("model", "model terpilih"); ada_m = "r_model_t1" in kor.columns
+        n_g = int(kor["lolos_fdr_gcm_target"].sum()); ir = kor["r_gcm_target"].abs().idxmax(); rmax, umax = float(kor.loc[ir, "r_gcm_target"]), kor.loc[ir, "unit"]
+        st.markdown("##### Apakah model iklim membawa informasi waktu? Korelasi per bulan dan musim")
+        teks = (f"Dari **{len(kor)} uji** (12 bulan, 4 musim, 1 tahunan), hanya **{n_g}** korelasi hujan GCM dengan {meta['target']} yang tetap nyata setelah koreksi uji berganda (FDR). Korelasi terbesar **{n(rmax, 2, True)}** ({umax}) masih di bawah batas kritis **{n(rk, 2)}**. "
+                + ("Artinya hujan GCM tidak mengikuti kejadian nyata pada skala bulan, musim, maupun tahun, sehingga proyeksi diambil dari model yang dilatih dengan data ERA5, bukan dari hujan GCM langsung." if n_g == 0 else "Sebagian korelasi nyata; lihat grafik untuk bulan atau musim mana."))
+        st.success(teks)
+        pil = st.radio("Skala waktu", ["Per bulan", "Per musim dan tahunan"], horizontal=True, key="kor_skala"); d = kor[kor["jenis"].isin(["bulan"] if pil == "Per bulan" else ["musim", "tahunan"])]; musim = pil != "Per bulan"
+        def batang(y, lolos, nama, warna):
+            return go.Bar(x=d["unit"], y=d[y], name=nama, marker_color=warna, text=["★" if (pd.notna(v) and bool(v)) else "" for v in d[lolos]] if lolos in d.columns else None, textposition="outside", textfont=dict(size=16),
+                          hovertemplate="%{x}<br><b>r = %{y:.2f}</b><extra>" + nama + "</extra>")
+        fig = go.Figure(); fig.add_trace(batang("r_gcm_target", "lolos_fdr_gcm_target", f"Hujan GCM vs {meta['target']}", C_BASE))
+        if ada_m: fig.add_trace(batang("r_model_t1", "lolos_fdr_model_t1", f"Model {nm_model} (data ERA5) vs {meta['target']}", TEAL))
+        if musim and "r_oof_indeks_era5_musiman" in d.columns: fig.add_trace(batang("r_oof_indeks_era5_musiman", "lolos_fdr_indeks_era5_musiman", "Kontrol: indeks ERA5 (uji musiman)", ORANYE))
+        for yy in (rk, -rk): fig.add_hline(y=yy, line_dash="dot", line_width=1.5, line_color="#555")
+        fig.add_hline(y=0, line_color="#888", line_width=1); fig.update_layout(barmode="group", title=f"Korelasi antar-tahun dengan {meta['target']} ({pil.lower()})", yaxis_title="korelasi (r)", yaxis_range=[-0.65, 1.05], hovermode="x unified"); tampil(fig, 440)
+        st.caption(f"**Cara membaca:** batang di luar garis putus-putus (±{n(rk, 2)}) nyata pada p < 0,05 sebelum koreksi; tanda ★ berarti tetap nyata setelah koreksi {len(kor)} uji. Abu-abu = hujan GCM mentah (tidak sefase dengan kejadian nyata). Teal = model yang dilatih dengan data ERA5, diuji pada tahun yang tidak dilihat model. "
+                   "Jingga (hanya musim) = kontrol positif: bila indeks ERA5 lolos tetapi GCM tidak, ujinya cukup peka dan GCM memang tidak membawa informasi waktu.")
+        if ada_m: st.caption(f"Periode: GCM vs {meta['target']} memakai {mk.get('periode_gcm_target', ['?', '?'])[0]}-{mk.get('periode_gcm_target', ['?', '?'])[1]} (periode latih); model memakai {mk.get('periode_model_t1', ['?', '?'])[0]}-{mk.get('periode_model_t1', ['?', '?'])[1]} (out-of-fold), jadi batas kritisnya sedikit berbeda. Korelasi tinggi pada rata-rata wilayah belum berarti model bagus per grid atau per bulan tertentu.")
+        with st.expander("Lihat angka lengkap (untuk peneliti)"):
+            tb = kor.rename(columns={"unit": "unit", "r_gcm_target": "r GCM-target", "p_gcm_target": "p GCM-target", "lolos_fdr_gcm_target": "lolos FDR (GCM)", "r_model_t1": "r model (T1)", "p_model_t1": "p model (T1)", "lolos_fdr_model_t1": "lolos FDR (model)",
+                                     "r_oof_indeks_era5_musiman": "r ERA5 (kontrol)", "r_oof_indeks_gcm_musiman": "r indeks GCM", "r_oof_pr_gcm_musiman": "r pr GCM (musiman)"})
+            st.dataframe(tb[[c for c in ["unit", "jenis", "r GCM-target", "p GCM-target", "lolos FDR (GCM)", "r model (T1)", "p model (T1)", "lolos FDR (model)", "r ERA5 (kontrol)", "r indeks GCM", "r pr GCM (musiman)"] if c in tb.columns]].set_index("unit").round(3))
+            st.download_button("Unduh tabel korelasi (CSV)", kor.to_csv(index=False).encode("utf-8-sig"), file_name="korelasi_bulan_musim_banten.csv", mime="text/csv")
+        if kor_antar is not None:
+            st.markdown("##### Apakah bulan basah diikuti bulan basah? Persistensi antar-bulan dan antar-musim")
+            jp = st.radio("Skala", ["antar-bulan", "antar-musim"], horizontal=True, key="kor_antar_jenis", format_func=lambda v: {"antar-bulan": "Antar-bulan (12 x 12)", "antar-musim": "Antar-musim (4 x 4)"}[v])
+            da = kor_antar[kor_antar["jenis"] == jp]; cols = st.columns(2, gap="medium"); ring = []
+            for cc, sumber in zip(cols, da["sumber"].unique()):
+                M = da[da["sumber"] == sumber].pivot(index="baris", columns="kolom", values="r"); urut = list(dict.fromkeys(da["baris"])); M = M.loc[urut, urut]
+                off = M.to_numpy()[np.triu_indices(len(urut), 1)]; ring.append((sumber, float(np.mean(off)), float(np.max(off))))
+                with cc:
+                    fg = go.Figure(go.Heatmap(z=M.to_numpy(), x=urut, y=urut, colorscale="RdBu_r", zmin=-0.7, zmax=0.7, zmid=0, colorbar=dict(title="r"), texttemplate="%{z:.2f}" if len(urut) <= 4 else None, hovertemplate="%{y} dan %{x}<br><b>r = %{z:.2f}</b><extra></extra>"))
+                    fg.update_layout(title=f"{sumber}: korelasi {jp}"); fg.update_yaxes(autorange="reversed"); tampil(fg, 420)
+            st.caption("**Cara membaca:** merah = dua bulan (atau musim) cenderung sama-sama basah atau sama-sama kering di tahun yang sama; biru = berlawanan; putih = tidak berhubungan. Diagonal selalu 1. " + "; ".join(f"{a}: rata-rata {n(m, 2, True)}, terbesar {n(x, 2, True)}" for a, m, x in ring) + ". Korelasi dari sekitar 34 tahun punya galat baku sekitar 0,17, jadi selisih kecil antar-sel jangan ditafsirkan. Struktur ini menentukan seberapa lebar sebaran SPI-3/6/12.")
+        for c in mk.get("catatan", []): st.write("- " + c)
 
 # ---------------- tab 3: panduan & metode ----------------
 with tab3:
