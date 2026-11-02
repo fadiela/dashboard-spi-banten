@@ -37,6 +37,11 @@ KATEGORI_SPI = pd.DataFrame({"Nilai SPI": ["2,0 atau lebih", "1,5 sampai 1,99", 
                              "Kategori": ["Sangat basah (ekstrem)", "Sangat basah", "Cukup basah", "Normal", "Kering", "Sangat kering", "Kering ekstrem"],
                              "Dihitung 'kering' di dashboard?": ["Tidak", "Tidak", "Tidak", "Tidak", "Ya", "Ya (juga 'sangat kering')", "Ya (juga 'sangat kering')"]})
 
+# Pita warna kategori SPI untuk grafik deret: (batas bawah, batas atas, warna, nama)
+PITA_SPI = [(-9, -2, "#8e0000", "Kering ekstrem"), (-2, -1.5, "#e53935", "Sangat kering"), (-1.5, -1, "#fb8c00", "Kering"), (-1, 1, None, "Normal"),
+            (1, 1.5, "#9ccc65", "Cukup basah"), (1.5, 2, "#43a047", "Sangat basah"), (2, 9, "#1b5e20", "Basah ekstrem")]
+WARNA_PETA = {"pos": ("YlOrRd", None, "%", "Frekuensi kering"), "pp": ("RdBu_r", 0, " poin", "Selisih vs 1981-2010"), "spi": ("BrBG", 0, "", "SPI median")}
+
 # ---------------- sumber data ----------------
 def ambil_drive_id():
     v = os.environ.get("DRIVE_FOLDER_ID")
@@ -161,8 +166,8 @@ def catatan_meta(kata, default=""):
     return next((c for c in meta["catatan"] if kata in c), default)
 
 # ---------------- pembantu grafik ----------------
-def tampil(fig, tinggi=420):
-    fig.update_layout(height=tinggi, margin=dict(l=10, r=10, t=56, b=10), legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=13)), font=dict(size=14), separators=",.",
+def tampil(fig, tinggi=420, bawah=10):
+    fig.update_layout(height=tinggi, margin=dict(l=10, r=10, t=56, b=bawah), legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=13)), font=dict(size=14), separators=",.",
                       title=dict(font=dict(size=16)), hoverlabel=dict(font_size=14))
     fig.update_xaxes(showgrid=True, gridcolor="rgba(128,128,128,0.35)", linecolor="rgba(128,128,128,0.9)", linewidth=1.5, ticks="outside", tickfont=dict(size=13))
     fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.35)", linecolor="rgba(128,128,128,0.9)", linewidth=1.5, ticks="outside", tickfont=dict(size=13))
@@ -390,6 +395,24 @@ with tab2:
 
             st.download_button("Unduh tabel per grid untuk pilihan ini (CSV)", agg.drop(columns=["p_sangat"], errors="ignore").rename(columns={"p_kering": "bulan_kering_pct", "spi": "spi_median_rata2", "kering_model_pct": "baseline_model_pct", "kering_target_pct": f"baseline_{meta['target']}_pct", "selisih_pp": "selisih_poin"}).round(3).to_csv(index=False).encode("utf-8-sig"),
                                file_name=f"peta_kering_banten_{skala}_{etiket_th}.csv", mime="text/csv")
+            with st.expander("Animasi per tahun: lihat peta berubah dari tahun ke tahun"):
+                if not (gaya and hasattr(go, "Choroplethmap")): st.info("Animasi butuh peta dasar. Ubah 'Gaya peta' di Pengaturan lanjutan ke gaya selain 'Kotak saja'.")
+                elif len(tahun_pilih) < 2: st.info("Pilih rentang minimal dua tahun di panel Pilihan.")
+                elif st.checkbox("Buat animasi sesuai pilihan di atas (agak berat, tunggu sebentar)", key="buat_anim"):
+                    gy = gs.groupby(["tahun", "grid_id"]).agg(p=("p_kering", "mean"), sp=("spi_median", "mean")).reset_index(); gids = agg["grid_id"].to_numpy(); bgrid = agg.set_index("grid_id")["kering_model_pct"].reindex(gids).to_numpy()
+                    def nilai(y):
+                        d = gy[gy["tahun"] == y].set_index("grid_id").reindex(gids)
+                        return (d["p"] * 100).to_numpy() if mode_k == "pos" else (d["p"] * 100 - bgrid) if mode_k == "pp" else d["sp"].to_numpy()
+                    nilai_th = {y: nilai(y) for y in tahun_pilih}; wr, zm, sat, lab = WARNA_PETA[mode_k]; a0, a1 = batas_skala(np.concatenate(list(nilai_th.values())), mode_k)
+                    fa = peta(agg.assign(z_anim=nilai_th[tahun_pilih[0]]), "z_anim", f"{skala} | {lab} | {etiket_bl} | per tahun", wr, a0, a1, sat, lab, zmid=zm, gaya=gaya)
+                    fa.frames = [go.Frame(name=str(y), traces=[0], data=[go.Choroplethmap(z=nilai_th[y])]) for y in tahun_pilih]
+                    fa.update_layout(updatemenus=[dict(type="buttons", direction="left", showactive=False, x=0.0, y=-0.02, xanchor="left", yanchor="top", buttons=[
+                                         dict(label="▶ Putar", method="animate", args=[None, dict(frame=dict(duration=800, redraw=True), fromcurrent=True, transition=dict(duration=0))]),
+                                         dict(label="⏸ Jeda", method="animate", args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate", transition=dict(duration=0))])])],
+                                     sliders=[dict(x=0.18, len=0.8, y=-0.02, yanchor="top", currentvalue=dict(prefix="Tahun: "), steps=[dict(method="animate", label=str(y), args=[[str(y)], dict(mode="immediate", frame=dict(duration=0, redraw=True), transition=dict(duration=0))]) for y in tahun_pilih])])
+                    tampil(fa, 600, 90)
+                    st.caption("**Cara membaca:** tekan Putar atau geser slider tahun. Warna memakai skala yang sama untuk semua tahun, jadi bisa dibandingkan. Satu tahun = satu realisasi model, jadi perhatikan pola umum, bukan tahun tertentu.")
+                else: st.caption("Centang kotak di atas untuk membuat animasi dari pilihan tahun, bulan/musim, dan jenis peta di panel Pilihan.")
             with st.expander("Detail untuk peneliti: deret SPI bulanan dan pola bulanan dengan kisaran acak"):
                 cE, cF = st.columns(2, gap="medium")
                 with cE: tampil(grafik_profil(True), 460); st.caption("Pita abu-abu: kisaran acak kasar dari baseline untuk jumlah tahun terpilih. Batang di luar pita menyimpang lebih dari kisaran acak, tetapi itu belum tentu sinyal iklim (bisa variabilitas internal GCM atau prediktor).")
@@ -400,9 +423,13 @@ with tab2:
                     fig.add_trace(go.Scatter(x=tgl[ok], y=sub["spi_median"], mode="markers", marker=dict(color=TEAL, size=8), name="median (bulan terpilih)",
                                              error_y=dict(type="data", symmetric=False, array=(sub["spi_p90"] - sub["spi_median"]).to_numpy(), arrayminus=(sub["spi_median"] - sub["spi_p10"]).to_numpy(), color="rgba(15,139,141,0.55)", thickness=1.6, width=0),
                                              customdata=np.c_[sub["spi_p10"], sub["spi_p90"]], hovertemplate="%{x|%b %Y}<br><b>median %{y:.2f}</b><br>p10 %{customdata[0]:.2f} | p90 %{customdata[1]:.2f}<extra></extra>"))
-                    fig.add_hline(y=-1, line_dash="dash", line_width=2.5, line_color="#e53935", annotation_text="ambang kering (-1)", annotation_position="bottom right"); fig.add_hline(y=0, line_color="#888", line_width=1)
+                    vv = pd.concat([rt.loc[thn, "spi_p10"], rt.loc[thn, "spi_p90"]]).dropna(); ylo, yhi = min(-2.5, float(vv.min()) - 0.2), max(2.5, float(vv.max()) + 0.2)
+                    for b0, b1, wr, nmk in PITA_SPI:
+                        y0, y1 = max(b0, ylo), min(b1, yhi)
+                        if y0 < y1: fig.add_hrect(y0=y0, y1=y1, fillcolor=wr or "rgba(128,128,128,0.06)", opacity=0.16 if wr else 1, line_width=0, layer="below", annotation_text=nmk, annotation_position="top right", annotation_font_size=11)
+                    fig.add_hline(y=-1, line_dash="dash", line_width=2.5, line_color="#e53935"); fig.add_hline(y=0, line_color="#888", line_width=1); fig.update_yaxes(range=[ylo, yhi])
                     fig.update_layout(title=f"Deret SPI bulanan wilayah ({skala}; garis tegak = p10-p90)", yaxis_title=f"{skala} rata-rata wilayah", hovermode="closest"); tampil(fig, 460)
-                    st.caption("Satu titik = satu bulan dalam satu lintasan GCM. Tidak untuk dibaca sebagai ramalan bulan itu.")
+                    st.caption("Pita warna = kategori SPI (garis merah putus-putus = ambang kering, -1). Satu titik = satu bulan dalam satu lintasan GCM, bukan ramalan bulan itu.")
 
 # ---------------- tab 3: panduan & metode ----------------
 with tab3:
