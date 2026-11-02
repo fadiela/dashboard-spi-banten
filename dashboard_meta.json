@@ -16,6 +16,11 @@
     "SPI-12"
   ],
   "ambang_kering": -1.0,
+  "proyeksi_pct": {
+    "SPI-3": 16.675776218561452,
+    "SPI-6": 15.33979626776237,
+    "SPI-12": 17.10011009751494
+  },
   "acuan_target_pct": {
     "SPI-3": 16.180661362225607,
     "SPI-6": 15.150092474036136,
@@ -74,5 +79,26 @@
       2010
     ],
     "n_anggota": 20
+  },
+  "korelasi": {
+    "berkas": [
+      "dashboard_korelasi.csv",
+      "dashboard_korelasi_antar.csv"
+    ],
+    "periode_gcm_target": [
+      1981,
+      2014
+    ],
+    "periode_model_t1": [
+      1981,
+      2025
+    ],
+    "r_kritis_p05": 0.33878805389648536,
+    "model": "Neural Net",
+    "catatan": [
+      "r GCM-target: korelasi antar-tahun pada rata-rata wilayah, hanya periode latih (sel 5.12). r model: Tingkat 1 (prediktor ERA5), out-of-fold, rata-rata wilayah.",
+      "Ada 17 uji (12 bulan, 4 musim, tahunan); hanya yang lolos FDR dianggap bukti. Dengan sekitar 34 tahun, galat baku tiap korelasi sekitar 0,17, jadi selisih kecil jangan ditafsirkan.",
+      "Kontrol sefase ERA5 (sel 10.5) menunjukkan uji ini punya daya: bila ERA5 lolos tetapi GCM tidak, GCM memang tidak membawa informasi waktu."
+    ]
   }
 }
