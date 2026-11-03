@@ -65,7 +65,10 @@
     "Status model: lolos gerbang penuh. Baca perubahan terhadap baseline model sendiri, bukan nilai mutlak.",
     "Tahun awal deret: k-1 bulan pertama SPI-k kosong (lihat n_bulan_valid).",
     "Pola tahun/bulan kering pada deret berasal dari variabilitas internal GCM (mirip ENSO) pada satu lintasan, bukan prediksi kejadian nyata; agregasi banyak tahun/bulan lebih bermakna daripada satu bulan.",
-    "Peluang kering = porsi anggota ensemble dengan SPI <= -1. Pita antar-anggota sempit karena hanya derau di sekitar mu yang sama; bukan ukuran ketidakpastian iklim."
+    "Peluang kering = porsi anggota ensemble dengan SPI <= -1. Pita antar-anggota sempit karena hanya derau di sekitar mu yang sama; bukan ukuran ketidakpastian iklim.",
+    "Prediktor GCM dipotong ke rentang ERA5: sinyal perubahan dari indeks di luar rentang tidak terbawa. Lihat uji sensitivitas di tab Bandingkan model.",
+    "Model utama dipilih oleh aturan gerbang yang ditetapkan sebelum hasil dilihat (dengan aturan cadangan post-hoc bila tidak ada yang lolos), bukan terbukti terbaik. Pada sebaran Tingkat 2, CI bootstrap selisih terhadap klimatologi stokastik memuat 0.",
+    "Seluruh hasil dibaca sebagai proyeksi sensitivitas bersyarat (satu GCM, satu skenario, satu anggota), bukan temuan iklim Banten."
   ],
   "bulanan": {
     "berkas": [
@@ -170,5 +173,15 @@
       ]
     },
     "catatan": "Perubahan relatif hujan rata-rata wilayah (persen) terhadap baseline: hujan GCM mentah vs mean model P (digerakkan prediktor GCM). Berlawanan = tanda berbeda, dengan |perubahan| >= toleransi pada keduanya."
-  }
+  },
+  "versi_notebook": "v18",
+  "tanggal_run": "2026-11-03",
+  "seed": 42,
+  "n_sim_proyeksi": 20,
+  "prediktor_tidak_stabil": [
+    "pi_hus850_jbr",
+    "pi_prw_jbr",
+    "pi_sst_ie"
+  ],
+  "ci_tingkat2_memuat_nol": true
 }
