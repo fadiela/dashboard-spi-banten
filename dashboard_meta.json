@@ -100,5 +100,75 @@
       "Ada 17 uji (12 bulan, 4 musim, tahunan); hanya yang lolos FDR dianggap bukti. Dengan sekitar 34 tahun, galat baku tiap korelasi sekitar 0,17, jadi selisih kecil jangan ditafsirkan.",
       "Kontrol sefase ERA5 (sel 10.5) menunjukkan uji ini punya daya: bila ERA5 lolos tetapi GCM tidak, GCM memang tidak membawa informasi waktu."
     ]
+  },
+  "konsistensi_arah": {
+    "model": "Neural Net",
+    "toleransi_pct": 1.0,
+    "jendela": [
+      {
+        "jendela": "2026-2050",
+        "peran": "dilaporkan",
+        "gcm_pr_mentah_pct": -14.74,
+        "model_pct": 5.62,
+        "luar_rentang_pct": 14.0,
+        "berlawanan": true,
+        "semua_model_pct": {
+          "GLM Gamma": 29.94,
+          "Random Forest": 1.25,
+          "XGBoost": 0.07,
+          "Neural Net": 5.62
+        }
+      },
+      {
+        "jendela": "2051-2075",
+        "peran": "diagnostik",
+        "gcm_pr_mentah_pct": -4.94,
+        "model_pct": 33.91,
+        "luar_rentang_pct": 56.3,
+        "berlawanan": true,
+        "semua_model_pct": {
+          "GLM Gamma": 70.68,
+          "Random Forest": 16.33,
+          "XGBoost": 15.53,
+          "Neural Net": 33.91
+        }
+      },
+      {
+        "jendela": "2076-2100",
+        "peran": "diagnostik",
+        "gcm_pr_mentah_pct": -15.0,
+        "model_pct": 39.29,
+        "luar_rentang_pct": 78.3,
+        "berlawanan": true,
+        "semua_model_pct": {
+          "GLM Gamma": 83.18,
+          "Random Forest": 13.08,
+          "XGBoost": 9.85,
+          "Neural Net": 39.29
+        }
+      }
+    ],
+    "model_berlawanan": {
+      "GLM Gamma": [
+        "2026-2050",
+        "2051-2075",
+        "2076-2100"
+      ],
+      "Random Forest": [
+        "2026-2050",
+        "2051-2075",
+        "2076-2100"
+      ],
+      "XGBoost": [
+        "2051-2075",
+        "2076-2100"
+      ],
+      "Neural Net": [
+        "2026-2050",
+        "2051-2075",
+        "2076-2100"
+      ]
+    },
+    "catatan": "Perubahan relatif hujan rata-rata wilayah (persen) terhadap baseline: hujan GCM mentah vs mean model P (digerakkan prediktor GCM). Berlawanan = tanda berbeda, dengan |perubahan| >= toleransi pada keduanya."
   }
 }
