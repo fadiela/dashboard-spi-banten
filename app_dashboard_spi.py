@@ -21,6 +21,11 @@ st.markdown("""<style>
 .kpi .s {font-size: 0.8rem; opacity: 0.75; line-height: 1.25;}
 .badge {display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; margin: 2px 6px 2px 0; border: 1px solid;}
 .badge.ok {background: rgba(46,125,50,0.14); border-color: rgba(46,125,50,0.6);} .badge.warn {background: rgba(245,124,0,0.14); border-color: rgba(245,124,0,0.7);} .badge.info {background: rgba(128,128,128,0.14); border-color: rgba(128,128,128,0.55);}
+.find-grid {display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); margin: 6px 0 10px 0;}
+@media (max-width: 700px) {.find-grid {grid-template-columns: 1fr;}}
+.finding {border-left: 6px solid; border-radius: 8px; padding: 10px 14px; background: rgba(128,128,128,0.09);}
+.finding.ok {border-color: #2e7d32;} .finding.warn {border-color: #f57c00;} .finding.info {border-color: #0f8b8d;}
+.finding .t {font-weight: 700; margin-bottom: 3px; line-height: 1.25;} .finding .b {font-size: 0.92rem; line-height: 1.42; opacity: 0.92;}
 button[data-baseweb="tab"] p {font-weight: 700; font-size: 1.02rem;}
 </style>""", unsafe_allow_html=True)
 
@@ -166,6 +171,10 @@ def kartu(label, nilai, sub=""):
 def kpi_grid(daftar, kolom=4):
     st.markdown(f'<div class="kpi-grid k{kolom}">' + "".join(daftar) + "</div>", unsafe_allow_html=True)
 
+def kartu_temuan(judul, isi, jenis="info"):
+    e = html.escape
+    return f'<div class="finding {jenis}"><div class="t">{e(judul)}</div><div class="b">{e(isi)}</div></div>'
+
 def lencana(teks, jenis="ok"):
     return f'<span class="badge {jenis}">{html.escape(teks)}</span>'
 
@@ -254,6 +263,12 @@ KOL_RATA = "kering_pct_mean" if "kering_pct_mean" in r.columns else "kering_pct_
 rata_nb = (meta.get("proyeksi_pct") or {}).get(skala)
 rata = float(rata_nb) if rata_nb is not None else float(np.average(r[KOL_RATA], weights=r["n_bulan_valid"])); sel = rata - base; kode, kalimat = tafsir(sel, se_kasar(r[KOL_RATA]))
 
+SK = {}                                                   # ringkasan per skala SPI: proyeksi, baseline, selisih, galat baku kasar, kode tafsir
+for s_ in meta["spi_skala"]:
+    d_ = reg[reg["SPI"] == s_].sort_values("tahun"); kol_ = "kering_pct_mean" if "kering_pct_mean" in d_.columns else "kering_pct_median"; p_ = (meta.get("proyeksi_pct") or {}).get(s_)
+    p_ = float(p_) if p_ is not None else float(np.average(d_[kol_], weights=d_["n_bulan_valid"])); b_ = float(meta["baseline_model_sendiri_pct"][s_]); se_ = se_kasar(d_[kol_])
+    SK[s_] = dict(proy=p_, base=b_, sel=p_ - b_, se=se_, kode=tafsir(p_ - b_, se_)[0])
+
 st.title(f"Proyeksi kekeringan Banten {h0}-{h1}")
 st.caption(f"Berdasarkan model iklim global {meta['gcm']} (skenario {meta['skenario']}), diperhalus ke skala lokal Banten dengan model {meta['model']} dan dikalibrasi ke data hujan {meta['target']}.")
 if not str(meta["status_gerbang"]).startswith("lolos"):
@@ -270,6 +285,29 @@ tab1, tab2, tab_k, tab3 = st.tabs(["Ringkasan", "Peta & musim", "Korelasi & vali
 with tab1:
     st.success(f"**Kesimpulan ({skala}):** selama {h0}-{h1}, sekitar **{n(rata)}%** bulan di Banten diproyeksikan kering, dibanding **{n(base)}%** pada 1981-2010 menurut model yang sama (selisih {n(sel, 1, True)} poin). {kalimat}")
     st.caption("'Kering' = SPI <= -1. 'Poin' = poin persentase (selisih dua persentase). Ini proyeksi bersyarat dari satu model iklim dan satu skenario, bukan ramalan.")
+    # ---- temuan utama (otomatis dari data; kartu hanya muncul bila datanya ada) ----
+    cards = []
+    n_berarti = sum(v["kode"] in ("lebih", "kurang") for v in SK.values()); tanda = {int(np.sign(v["sel"])) for v in SK.values()}
+    rinci = ", ".join(f"{s_} {n(v['sel'], 1, True)} poin" for s_, v in SK.items())
+    if n_berarti == 0: j1 = "Belum ada perubahan yang berarti" + (", dan arahnya tidak seragam antar skala" if len(tanda) > 1 else "")
+    elif n_berarti == len(SK) and len({int(np.sign(v["sel"])) for v in SK.values()}) == 1: j1 = "Perubahan searah di semua skala SPI"
+    else: j1 = "Hanya sebagian skala SPI yang berubah berarti"
+    cards.append(kartu_temuan(j1, f"Selisih frekuensi bulan kering terhadap 1981-2010: {rinci}. " + ("Semuanya masih dalam kisaran naik-turun alami antar-tahun." if n_berarti == 0 else f"{n_berarti} dari {len(SK)} skala melewati kisaran naik-turun alami."), "info"))
+    if kor is not None:
+        ng = int(kor["lolos_fdr_gcm_target"].sum()); nmod = int(kor["lolos_fdr_model_t1"].sum()) if "lolos_fdr_model_t1" in kor.columns else None
+        cards.append(kartu_temuan("Hujan GCM mentah tidak membawa informasi waktu" if ng == 0 else "Sebagian korelasi hujan GCM nyata",
+                                  f"{ng} dari {len(kor)} uji korelasi (12 bulan, 4 musim, tahunan) antara hujan GCM dan {meta['target']} lolos koreksi FDR" + (f", sedangkan model yang dilatih dengan data ERA5 lolos {nmod} dari {len(kor)}. " if nmod is not None else ". ") + "Karena itu proyeksi memakai model ERA5, bukan hujan GCM langsung.", "ok" if ng == 0 else "info"))
+    ka = meta.get("konsistensi_arah")
+    if ka and ka.get("jendela"):
+        lap = next((j for j in ka["jendela"] if j.get("peran") == "dilaporkan"), ka["jendela"][0]); nb_ = sum(bool(j["berlawanan"]) for j in ka["jendela"])
+        cards.append(kartu_temuan("Arah proyeksi berlawanan dengan hujan GCM mentah" if lap["berlawanan"] else "Arah proyeksi searah dengan hujan GCM mentah",
+                                  f"Pada {lap['jendela']}, hujan GCM mentah berubah {n(lap['gcm_pr_mentah_pct'], 1, True)}%, sedangkan model memproyeksikan {n(lap['model_pct'], 1, True)}% (berlawanan di {nb_} dari {len(ka['jendela'])} jendela waktu). "
+                                  + ("Sebabnya belum dibuktikan, jadi arah perubahan dibaca sebagai bersyarat pada model, bukan temuan iklim." if lap["berlawanan"] else "Arah ini konsisten dengan sinyal GCM."), "warn" if lap["berlawanan"] else "ok"))
+    lr = meta.get("baris_prediktor_luar_rentang_pct")
+    if lr:
+        cards.append(kartu_temuan("Keandalan menurun untuk periode yang lebih jauh", "Data masukan di luar rentang latih: " + ", ".join(f"{k} {v:.0f}%" for k, v in lr.items()) + f". Karena itu hasil hanya dilaporkan sampai {h1}.", "warn" if max(lr.values()) >= 50 else "info"))
+    st.markdown("##### Temuan utama"); st.markdown('<div class="find-grid">' + "".join(cards) + "</div>", unsafe_allow_html=True)
+    st.caption("**Cara memakai hasil ini:** untuk membandingkan skala, wilayah, dan musim sebagai skenario bersyarat dari satu model. Bukan untuk meramal tahun tertentu atau menyimpulkan tren iklim Banten.")
     with st.expander("Baru pertama kali? Baca ini dulu (30 detik)"):
         st.markdown("- **Apa yang ditampilkan?** Seberapa sering bulan kering (SPI <= -1) diproyeksikan terjadi di Banten pada tahun-tahun ke depan.\n"
                     "- **Dibandingkan dengan apa?** Garis abu-abu = kondisi 1981-2010 menurut model yang sama. Kalau grafik berada di atas garis itu, bulan kering lebih sering; di bawahnya, lebih jarang.\n"
@@ -277,6 +315,13 @@ with tab1:
                     "- **Mau lihat per wilayah atau per musim?** Buka tab *Peta & musim*.")
     kpi_grid([kartu(f"Bulan kering rata-rata {h0}-{h1}", f"{n(rata)}%", f"{r['tahun'].nunique()} tahun, rata-rata simulasi"), kartu("Kondisi 1981-2010 (menurut model)", f"{n(base)}%", "pembanding utama"),
               kartu("Selisih", f"{n(sel, 1, True)} poin", KET_KODE[kode])], 3)
+
+    st.markdown("##### Ketiga skala SPI sekaligus")
+    sk_n = list(SK); fig = go.Figure(go.Bar(x=[f"{s_}<br>{n(SK[s_]['sel'], 1, True)} poin<br>{KET_KODE[SK[s_]['kode']]}" for s_ in sk_n], y=[SK[s_]["sel"] for s_ in sk_n], marker_color=["#e57373" if SK[s_]["sel"] > 0 else "#64b5f6" for s_ in sk_n],
+                           error_y=dict(type="data", array=[2 * SK[s_]["se"] if np.isfinite(SK[s_]["se"]) else 0 for s_ in sk_n], color="#555", thickness=2, width=9), customdata=[[SK[s_]["proy"], SK[s_]["base"]] for s_ in sk_n],
+                           hovertemplate="%{x}<br>proyeksi %{customdata[0]:.1f}% vs 1981-2010 %{customdata[1]:.1f}%<extra></extra>"))
+    fig.add_hline(y=0, line_color="#555", line_width=1.5); fig.update_layout(title="Selisih frekuensi bulan kering terhadap 1981-2010 (poin)", yaxis_title="poin persentase", showlegend=False); tampil(fig, 360)
+    st.caption("**Cara membaca:** merah = lebih sering kering daripada 1981-2010, biru = lebih jarang. Garis tegak = ±2 galat baku kasar dari naik-turun antar-tahun; bila garis itu menyentuh nol, perubahannya belum berarti.")
 
     st.markdown("##### Frekuensi bulan kering per tahun")
     c1, c2 = st.columns(2); pita = c1.toggle("Tampilkan sebaran antar simulasi", value=True); tampil_obs = c2.toggle(f"Bandingkan dengan data pengamatan ({meta['target']})", value=False)
@@ -291,7 +336,7 @@ with tab1:
     garis_acuan(fig, r["tahun"], base, "kondisi 1981-2010 (menurut model)", C_BASE, "dot")
     if tampil_obs: garis_acuan(fig, r["tahun"], acuan, f"kondisi 1981-2010 (data pengamatan {meta['target']})", C_TARGET, "dash")
     fig.update_layout(title=f"{skala}: % bulan kering di seluruh Banten", hovermode="x unified", xaxis_title="tahun", yaxis_title="% bulan kering"); tampil(fig, 440)
-    st.caption("**Cara membaca:** titik teal di atas garis abu-abu putus-putus = tahun itu lebih sering kering dari 1981-2010. Satu tahun hanyalah satu realisasi variasi model, bukan ramalan; garis oranye membantu melihat kecenderungan di balik naik-turunnya.")
+    st.caption("**Cara membaca:** titik teal di atas garis abu-abu putus-putus = tahun itu lebih sering kering dari 1981-2010. Satu tahun hanyalah satu realisasi variasi model, bukan ramalan; garis oranye membantu melihat kecenderungan di balik naik-turunnya. Garis teal = median simulasi tiap tahun, sedangkan angka kesimpulan di atas = rata-rata semua simulasi dan tahun.")
     if inc.any(): st.caption("Penanda berlubang = tahun awal dengan sebagian bulan SPI kosong: " + ", ".join(f"{int(t)} ({int(k)} bulan valid)" for t, k in r.loc[r["n_bulan_valid"] < 12, ["tahun", "n_bulan_valid"]].to_numpy()))
 
     st.markdown("##### Apakah makin kering? Bandingkan dua periode")
@@ -501,6 +546,12 @@ with tab3:
     st.markdown("**Gerbang model prediktor** (centang = lolos):")
     gb = pd.DataFrame(meta["gerbang"]).T.rename(columns={"a": "(a) skill sefase > 0", "b": "(b) distribusi <= 1,10 x klimatologi", "c": "(c) selisih kering <= 3 poin"}).replace({True: "✓ lolos", False: "✗ tidak"})
     st.dataframe(gb)
+    ka = meta.get("konsistensi_arah")
+    if ka and ka.get("jendela"):
+        st.markdown(f"**Konsistensi arah:** perubahan relatif hujan rata-rata wilayah (%), hujan GCM mentah vs model {ka.get('model', '')} (model lain di kolom sebelah kanan).")
+        ta = pd.DataFrame([{"Jendela": j["jendela"], "Peran": j["peran"], "Hujan GCM mentah (%)": j["gcm_pr_mentah_pct"], f"Model {ka.get('model', '')} (%)": j["model_pct"], "Berlawanan?": "ya" if j["berlawanan"] else "tidak", "Di luar rentang latih (%)": j["luar_rentang_pct"],
+                           **{f"{nm} (%)": v for nm, v in j.get("semua_model_pct", {}).items() if nm != ka.get("model")}} for j in ka["jendela"]]).set_index("Jendela"); st.dataframe(ta)
+        st.caption(ka.get("catatan", "") + " Berlawanan di jendela dengan persen luar-rentang tinggi bisa berupa artefak ekstrapolasi, bukan temuan iklim.")
     st.markdown("**Baris prediktor GCM di luar rentang ERA5 (dipotong).** Makin tinggi, makin jauh proyeksi dari kondisi yang dipakai melatih model; itu sebabnya hasil dilaporkan hanya sampai " + str(h1) + ".")
     st.dataframe(pd.Series(meta["baris_prediktor_luar_rentang_pct"], name="% baris").to_frame().round(1))
     if "bulanan" in meta: st.caption(f"Baseline bulanan memakai periode {meta['bulanan']['baseline_periode'][0]}-{meta['bulanan']['baseline_periode'][1]}.")
