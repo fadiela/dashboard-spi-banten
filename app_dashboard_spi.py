@@ -131,11 +131,14 @@ def _poligon_fitur(geom):
 
 @st.cache_data
 def muat_wilayah(folder, versi, grid_ref):
-    """Batas kabupaten/kota (opsional) dan pemetaan grid -> nama wilayah."""
+    """Batas kabupaten/kota (opsional), pemetaan grid -> nama wilayah, dan sel tambahan untuk pulau kecil yang tidak punya grid (nilai dari grid terdekat)."""
     for d in (folder, os.path.dirname(os.path.abspath(__file__))):
         p = os.path.join(d, "banten_kabkota.geojson")
         if os.path.exists(p):
             gj = json.load(open(p, encoding="utf-8")); px, py = grid_ref["lon"].to_numpy(float), grid_ref["lat"].to_numpy(float); nama = np.full(len(grid_ref), None, dtype=object); label = []
+            xs_ = np.unique(px.round(4)); step = float(np.median(np.diff(xs_))) if len(xs_) > 1 else 0.05; x0, y0 = float(px.min()), float(py.min())
+            idx = lambda a, o: np.floor((np.asarray(a, float) - o) / step + 0.5).astype(int)
+            ada = set(zip(idx(px, x0).tolist(), idx(py, y0).tolist())); ext_sel = {}
             for f in gj["features"]:
                 pr = f.get("properties", {}); nm = next((pr[k] for k in ("nama", "NAME_2", "name", "NAMOBJ", "WADMKK") if k in pr), str(f.get("id", "?"))); f["id"] = nm
                 dalam = np.zeros(len(px), bool); besar = None
@@ -143,12 +146,19 @@ def muat_wilayah(folder, versi, grid_ref):
                     ext = np.asarray(poly[0], float); m = _dalam_cincin(px, py, ext)
                     for hole in poly[1:]: m &= ~_dalam_cincin(px, py, np.asarray(hole, float))
                     dalam |= m
+                    if np.ptp(ext[:, 0]) < 4 * step and np.ptp(ext[:, 1]) < 4 * step:       # pulau kecil: tandai semua sel yang disentuh garis pantainya
+                        for cc in set(zip(idx(ext[:, 0], x0).tolist(), idx(ext[:, 1], y0).tolist())) | {(int(idx(ext[:, 0].mean(), x0)), int(idx(ext[:, 1].mean(), y0)))}:
+                            if cc not in ada and cc not in ext_sel: ext_sel[cc] = nm
                     luas = np.ptp(ext[:, 0]) * np.ptp(ext[:, 1])
                     if besar is None or luas > besar[0]: besar = (luas, ext[:, 0].mean(), ext[:, 1].mean())
                 nama[dalam & (nama == None)] = nm       # noqa: E711
                 if besar: label.append((nm, besar[1], besar[2]))
-            return gj, pd.DataFrame({"grid_id": grid_ref["grid_id"].to_numpy(), "wilayah": nama}), pd.DataFrame(label, columns=["nama", "lon", "lat"])
-    return None, pd.DataFrame({"grid_id": grid_ref["grid_id"].to_numpy(), "wilayah": None}), pd.DataFrame(columns=["nama", "lon", "lat"])
+            er = []
+            for k_, (cc, nm) in enumerate(ext_sel.items()):
+                lo_, la_ = x0 + cc[0] * step, y0 + cc[1] * step; d_ = np.hypot(px - lo_, py - la_); j = int(np.argmin(d_))
+                if d_[j] <= 0.4: er.append(dict(ext_id=int(grid_ref["grid_id"].max()) + 1000 + k_, src=int(grid_ref["grid_id"].iloc[j]), lon=lo_, lat=la_, wilayah=nm))
+            return gj, pd.DataFrame({"grid_id": grid_ref["grid_id"].to_numpy(), "wilayah": nama}), pd.DataFrame(label, columns=["nama", "lon", "lat"]), pd.DataFrame(er, columns=["ext_id", "src", "lon", "lat", "wilayah"])
+    return None, pd.DataFrame({"grid_id": grid_ref["grid_id"].to_numpy(), "wilayah": None}), pd.DataFrame(columns=["nama", "lon", "lat"]), pd.DataFrame(columns=["ext_id", "src", "lon", "lat", "wilayah"])
 
 try:
     reg, grd, meta = muat(folder, versi_folder(folder))
@@ -158,7 +168,7 @@ VF = versi_folder(folder)
 bln = muat_bulanan(folder, VF); kor, kor_antar = muat_korelasi(folder, VF); banding = muat_banding(folder, VF)
 gerb, sens = muat_csv(folder, "dashboard_model_gerbang.csv", VF), muat_csv(folder, "dashboard_sensitivitas.csv", VF)
 grid_ref = grd[["grid_id", "lat", "lon"]].drop_duplicates().sort_values("grid_id").reset_index(drop=True)
-gj, wil_tab, wil_label = muat_wilayah(folder, VF, grid_ref)
+gj, wil_tab, wil_label, wil_ext = muat_wilayah(folder, VF, grid_ref)
 
 # ---------------- pembantu teks dan angka ----------------
 def n(x, d=1, plus=False):
@@ -256,6 +266,7 @@ def peta(df, kol, warna, zmin, zmax, satuan, label, extra=(), zmid=None, gaya="c
     if gaya and hasattr(go, "Choroplethmap"):
         cd = np.c_[lon, lat, df[[k for _, k, _ in extra]].to_numpy()] if extra else np.c_[lon, lat]
         teks = df["wilayah"].fillna("Di luar batas kab/kota (laut atau provinsi lain)").to_numpy() if ada_w else None
+        if ada_w and "diisi" in df.columns: teks = teks + np.where(df["diisi"].to_numpy(bool), " · nilai dari grid terdekat", "")
         tr = go.Choroplethmap(geojson=kotak_geojson(df.assign(lon=lon, lat=lat), h), locations=df["grid_id"].astype(int).astype(str), z=df[kol], customdata=cd, text=teks, colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid,
                               marker=dict(opacity=0.88, line=dict(width=0.4, color="white")), hovertemplate=tip + "<extra></extra>", colorbar=dict(title=judul_cb))
         fig = go.Figure(tr); zoom = float(np.clip(np.log2(500 / 256 * 360 / (max(xs.max() - xs.min(), 0.2) * 1.2)) - 0.1, 5, 11))
@@ -366,6 +377,16 @@ with tab1:
 KET_PETA = {"Seberapa sering kering": "pos", "Dibanding 1981-2010": "pp"}
 TIP_PETA = {"pos": "Makin merah = makin sering bulan kering.", "pp": "Merah = lebih sering kering dari 1981-2010, biru = lebih jarang."}
 
+def tambah_pulau(agg):
+    """Tambahkan sel untuk pulau kecil (mis. Sangiang, Tinjil) dengan nilai dari grid terdekat; kolom 'diisi' menandainya."""
+    agg = agg.assign(diisi=False)
+    if wil_ext is None or wil_ext.empty or "wilayah" not in agg.columns: return agg
+    e = wil_ext[wil_ext["src"].isin(agg["grid_id"])]
+    if e.empty: return agg
+    s = agg.set_index("grid_id").loc[e["src"]].reset_index(drop=True)
+    s["grid_id"] = e["ext_id"].to_numpy(); s["lon"] = e["lon"].to_numpy(); s["lat"] = e["lat"].to_numpy(); s["wilayah"] = e["wilayah"].to_numpy(); s["diisi"] = True
+    return pd.concat([agg, s[agg.columns]], ignore_index=True)
+
 def ringkas_wilayah(agg, kolom, mode):
     """Kalimat insight peta: wilayah (atau grid) tertinggi dan terendah, atau 'seragam' bila sebarannya sempit."""
     sat = " poin" if mode == "pp" else "%"; f = lambda v: n(v, 1, mode == "pp") + sat
@@ -410,10 +431,11 @@ with tab2:
             agg = gs.groupby("grid_id").agg(p_kering=("p_kering", "mean"), p_sangat=("p_sangat_kering", "mean"), spi=("spi_median", "mean")).reset_index(); agg[["p_kering", "p_sangat"]] *= 100
             bs = basem[basem["bulan"].isin(bulan)].groupby("grid_id")[["kering_model_pct", "kering_target_pct"]].mean().reset_index()
             agg = agg.merge(bs, on="grid_id").merge(grid, on="grid_id"); agg["selisih_pp"] = agg["p_kering"] - agg["kering_model_pct"]
-            if dalam_saja: agg = agg[agg["wilayah"].notna()]
             if gj is None: agg = agg.drop(columns="wilayah")
+            agg = tambah_pulau(agg)
+            if dalam_saja: agg = agg[agg["wilayah"].notna()]
             if dalam_saja: gs = gs[gs["grid_id"].isin(agg["grid_id"])]
-            fk, fb = agg["p_kering"].mean(), agg["kering_model_pct"].mean(); sel_b = fk - fb
+            asli = agg[~agg["diisi"]]; fk, fb = asli["p_kering"].mean(), asli["kering_model_pct"].mean(); sel_b = fk - fb
             per_th = gs.groupby("tahun")["p_kering"].mean() * 100; kb, kal_b = tafsir(sel_b, se_kasar(per_th))
             with kr:
                 st.markdown(f"**{etiket_bl} · {etiket_th} · {skala}**")
@@ -475,77 +497,87 @@ with tab2:
 # ---------------- tab bandingkan model ----------------
 with tab_m:
     if banding is None:
-        st.info("Berkas dashboard_model_banding.csv belum ada. Jalankan sel 14i-3 notebook, lalu 14f.")
+        st.info("Berkas dashboard_model_banding.csv belum ada. Jalankan sel ekspor (14d-14i) di notebook, lalu 14f.")
     else:
-        bd = banding.copy()
-        if "jenis" not in bd.columns: bd["jenis"] = "model P"
-        st.caption("Model utama dipilih oleh aturan gerbang yang ditetapkan sebelum hasil dilihat, bukan terbukti terbaik. Model lain hanya pembanding.")
-
-        # --- 1. gerbang ---
+        bd = banding.copy(); KR = {"a": "(a) skill sefase", "b": "(b) sebaran", "c": "(c) frekuensi kering"}
+        ringkas_m = bd.drop_duplicates("model")[["model", "kriteria_lolos", "tampil"]].copy()
         if gerb is not None:
-            judul("Gerbang model", "(a) skill sefase > 0 (ERA5). (b) rasio sebaran terhadap klimatologi <= 1,10 (prediktor GCM). (c) selisih frekuensi kering SPI-3 dari pengamatan <= 3 poin. Kolom terakhir: apakah sebaran model sudah terbedakan dari klimatologi (CI bootstrap).")
-            ci_ = gerb["ci_qq_memuat_nol"].fillna(True).astype(bool) if "ci_qq_memuat_nol" in gerb.columns else pd.Series(True, index=gerb.index)
-            acu = float(gerb["acuan_c"].iloc[0]); sel_c = (gerb["c_kering_pct"] - acu).abs()
-            tg = pd.DataFrame({"Model": gerb["model"], "(a) skill sefase (>0)": gerb["a_crpss_t1"].round(3), "(b) rasio sebaran (<=1,10)": gerb["b_qq_rasio"].round(2), "(c) selisih kering (<=3 poin)": sel_c.round(1),
-                               "Lolos": gerb["kriteria_lolos"].astype(int).astype(str) + "/3", "Sebaran vs klimatologi": np.where(ci_, "belum terbedakan", "terbedakan")}).set_index("Model")
+            g_ = gerb.copy(); g_["tampil"] = g_["tampil"].astype(bool)
+            urut_m = g_.sort_values(["kriteria_lolos", "a_crpss_t1"], ascending=False)["model"].tolist()
+        else:
+            urut_m = ringkas_m.sort_values(["kriteria_lolos", "tampil"], ascending=False)["model"].tolist()
+        terbaik = urut_m[0]; k_best = int(ringkas_m.set_index("model").loc[terbaik, "kriteria_lolos"]); nama_tampil = ringkas_m[ringkas_m["tampil"].astype(bool)]["model"].iloc[0] if ringkas_m["tampil"].astype(bool).any() else terbaik
+
+        # --- 1. pilihan terbaik ---
+        judul("Empat model dibandingkan", "Peringkat: jumlah syarat gerbang yang lolos, lalu skill sefase Tingkat 1. Syarat (a) skill sefase > 0 (ERA5); (b) rasio sebaran <= 1,10; (c) selisih frekuensi kering SPI-3 dari pengamatan <= 3 poin.")
+        gagal = ""
+        if gerb is not None:
+            lst = []
+            for _, rw in g_.set_index("model").loc[[m for m in urut_m if m != terbaik]].iterrows():
+                tk = [KR[k] for k in ("a", "b", "c") if not bool(rw[f"{k}_lolos"])]
+                lst.append(f"{rw.name}: {', '.join(tk) if tk else 'lolos semua'}")
+            gagal = " Gagal di: " + "; ".join(lst) + "."
+            ci_ = g_["ci_qq_memuat_nol"].fillna(True).astype(bool)
+            catatan_ci = (f" Catatan: pada sebaran Tingkat 2, {int(ci_.sum())} dari {len(g_)} model belum terbedakan dari klimatologi stokastik (CI memuat 0), jadi 'terbaik' berarti paling memenuhi gerbang, bukan terbukti lebih baik dari baseline." if ci_.any() else "")
+        else: catatan_ci = ""
+        banner(f"Terbaik menurut gerbang: <b>{html.escape(terbaik)}</b> ({k_best}/3).{html.escape(gagal)}{html.escape(catatan_ci)}")
+        if gerb is not None:
+            acu = float(g_["acuan_c"].iloc[0])
+            tg = pd.DataFrame({"Peringkat": range(1, len(urut_m) + 1), "Model": urut_m}).set_index("Model")
+            gi = g_.set_index("model").loc[urut_m]
+            tg["Lolos"] = gi["kriteria_lolos"].astype(int).astype(str) + "/3"
+            tg["(a) skill sefase (>0)"] = gi["a_crpss_t1"].round(3); tg["(b) rasio sebaran (<=1,10)"] = gi["b_qq_rasio"].round(2); tg["(c) selisih kering (<=3 poin)"] = (gi["c_kering_pct"] - acu).abs().round(1)
+            tg["Dipakai di dashboard"] = np.where(tg.index == nama_tampil, "ya", "")
             st.dataframe(tg)
-            mu_ = gerb[gerb["tampil"].astype(bool)].iloc[0]; mc = abs(float(mu_["c_kering_pct"]) - acu)
-            ins(f"{int(gerb['lolos'].astype(bool).sum())} dari {len(gerb)} model lolos penuh. Margin kriteria (c) {mu_['model']}: {n(mc)} dari batas 3 poin. "
-                + (f"Pada sebaran Tingkat 2, {int(ci_.sum())} dari {len(gerb)} model belum terbedakan dari klimatologi (CI memuat 0)." if ci_.any() else "Semua model terbedakan dari klimatologi pada sebaran Tingkat 2."))
 
         # --- 2. selisih per model ---
-        b = bd[bd["SPI"] == skala]; urut = list(b.sort_values(["jenis", "tampil"], ascending=[False, False])["model"].unique())
-        ok_n = {m: b[b["model"] == m]["kriteria_lolos"].iloc[0] for m in urut}; ref_m = {m for m in urut if str(b[b["model"] == m]["jenis"].iloc[0]) == "referensi"}
-        lab = lambda m: f"{m} (referensi)" if m in ref_m else f"{m} ({int(ok_n[m])}/3)"
-        nama_tampil = next((m for m in urut if bool(b[b["model"] == m]["tampil"].iloc[0])), urut[0])
-        judul(f"Selisih terhadap baseline · {skala}", "Hanya model utama yang dipakai di tab lain. Garis tegak = ±2 galat baku kasar antar-tahun. QDM = koreksi bias GCM tanpa ML, dibanding CHIRPS 1981-2010.")
-        pilih_m = st.multiselect("Model", urut, default=urut, format_func=lambda m: lab(m) + (" · dipakai di dashboard" if m == nama_tampil else ""))
+        b = bd[bd["SPI"] == skala]; urut = [m for m in urut_m if m in set(b["model"])]
+        ok_n = {m: int(b[b["model"] == m]["kriteria_lolos"].iloc[0]) for m in urut}; lab = lambda m: f"{m} ({ok_n[m]}/3)"
+        judul(f"Selisih terhadap baseline · {skala}", "Garis tegak = ±2 galat baku kasar antar-tahun. Baseline = frekuensi kering model yang sama pada 1981-2010.")
+        pilih_m = st.multiselect("Model", urut, default=urut, format_func=lab)
         rs = []
         for m in pilih_m:
             d = b[b["model"] == m].sort_values("tahun"); bm = float(d["baseline_model_sendiri_pct"].iloc[0]); p = float(np.average(d["kering_pct_mean"], weights=d["n_bulan_valid"])); se_ = se_kasar(d["kering_pct_mean"])
             rs.append(dict(m=m, sel=p - bm, se=se_, kode=tafsir(p - bm, se_)[0], d=d, bm=bm, p=p))
         if not rs: st.warning("Pilih minimal satu model.")
         else:
-            warna_m = lambda m: TEAL if m == nama_tampil else ORANYE if m in ref_m else C_ABU
+            warna_m = lambda m: TEAL if m == nama_tampil else C_ABU
             fig = go.Figure(go.Bar(x=[lab(x["m"]) for x in rs], y=[x["sel"] for x in rs], marker_color=[warna_m(x["m"]) for x in rs],
                                    error_y=dict(type="data", array=[2 * x["se"] if np.isfinite(x["se"]) else 0 for x in rs], color="#555", thickness=2, width=9), customdata=[[x["p"], x["bm"], KET_KODE[x["kode"]]] for x in rs],
                                    text=[n(x["sel"], 1, True) for x in rs], textposition="outside", cliponaxis=False, hovertemplate="proyeksi %{customdata[0]:.1f}% vs baseline %{customdata[1]:.1f}%<br>%{customdata[2]}<extra></extra>"))
-            fig.add_hline(y=0, line_color="#555", line_width=1.5); fig.update_layout(yaxis_title="selisih (poin)", showlegend=False); tampil(fig, 320)
-            mp_ = [x for x in rs if x["m"] not in ref_m]; sels = [x["sel"] for x in mp_] or [0.0]; n_b = sum(x["kode"] in ("lebih", "kurang") for x in mp_)
-            qd = next((x for x in rs if x["m"] in ref_m), None)
-            ins(f"Model P: selisih {n(min(sels), 1, True)} sampai {n(max(sels), 1, True)} poin; " + (f"{n_b} dari {len(mp_)} melewati kisaran alami" if n_b else "tak satu pun melewati kisaran alami") + (", arah tidak seragam. " if len({int(np.sign(s)) for s in sels}) > 1 else ", arah searah. ")
-                + (f"QDM (GCM mentah) {n(qd['sel'], 1, True)} poin, {KET_KODE[qd['kode']]}." if qd else ""))
+            fig.add_hline(y=0, line_color="#555", line_width=1.5); fig.update_layout(yaxis_title="selisih (poin)", showlegend=False); tampil(fig, 300)
+            sels = [x["sel"] for x in rs]; n_b = sum(x["kode"] in ("lebih", "kurang") for x in rs)
+            ins(f"Selisih {n(min(sels), 1, True)} sampai {n(max(sels), 1, True)} poin; " + (f"{n_b} dari {len(rs)} melewati kisaran alami" if n_b else "tak satu pun melewati kisaran alami") + (", arah tidak seragam." if len({int(np.sign(s)) for s in sels}) > 1 else ", arah searah."))
 
-            judul("Selisih per tahun", "Rata-rata 5 tahun dari selisih terhadap baseline masing-masing; 0 = sama dengan 1981-2010. Model punya bias berbeda, jadi yang dibandingkan adalah selisihnya.")
+            judul("Selisih per tahun", "Rata-rata 5 tahun dari selisih terhadap baseline masing-masing; 0 = sama dengan 1981-2010.")
             fig = go.Figure()
             for i, x in enumerate(rs):
                 y = (x["d"]["kering_pct_mean"] - x["bm"]).rolling(5, center=True, min_periods=3).mean()
-                fig.add_trace(go.Scatter(x=x["d"]["tahun"], y=y, mode="lines", name=lab(x["m"]), line=dict(color=warna_m(x["m"]) if x["m"] == nama_tampil or x["m"] in ref_m else PALET_MODEL[i % len(PALET_MODEL)], width=4 if x["m"] == nama_tampil else 2, dash="solid" if x["m"] == nama_tampil else "dash"),
+                fig.add_trace(go.Scatter(x=x["d"]["tahun"], y=y, mode="lines", name=lab(x["m"]), line=dict(color=TEAL if x["m"] == nama_tampil else PALET_MODEL[i % len(PALET_MODEL)], width=4 if x["m"] == nama_tampil else 2, dash="solid" if x["m"] == nama_tampil else "dash"),
                                          hovertemplate="%{y:+.1f} poin<extra>" + x["m"] + "</extra>"))
-            fig.add_hline(y=0, line_color="#555", line_width=1.5); fig.update_layout(hovermode="x unified", xaxis_title="tahun", yaxis_title="selisih (poin)"); tampil(fig, 340)
+            fig.add_hline(y=0, line_color="#555", line_width=1.5); fig.update_layout(hovermode="x unified", xaxis_title="tahun", yaxis_title="selisih (poin)"); tampil(fig, 320)
             akhir = {x["m"]: float((x["d"]["kering_pct_mean"] - x["bm"]).rolling(5, center=True, min_periods=3).mean().iloc[-3]) for x in rs}
             ins(f"Menjelang akhir periode, {max(akhir, key=akhir.get)} paling condong kering ({n(max(akhir.values()), 1, True)} poin) dan {min(akhir, key=akhir.get)} paling jarang ({n(min(akhir.values()), 1, True)} poin).")
 
-        # --- 3. sensitivitas pemotongan ---
+        # --- 3. sensitivitas pemotongan (lipat) ---
         if sens is not None:
-            VAR = ["Dipotong (dipakai di dashboard)", "Tanpa pemotongan", "Hanya prediktor stabil"]
-            judul("Uji sensitivitas pemotongan prediktor", "Perubahan rata-rata hujan model (%, bukan frekuensi kering) pada jendela dilaporkan vs 1981-2010, dengan tiga perlakuan prediktor GCM. Prediktor dipotong ke rentang ERA5 supaya model tidak mengekstrapolasi.")
-            sm = sens[sens["model"] != "Hujan GCM mentah"]; g_ = sens[sens["model"] == "Hujan GCM mentah"]["delta_mu_pct"]; fig = go.Figure()
-            for v, wr in zip(VAR, [TEAL, ORANYE, "#5c6bc0"]):
-                dv = sm[sm["varian"] == v]
-                if not dv.empty: fig.add_trace(go.Bar(x=dv["model"], y=dv["delta_mu_pct"], name=v, marker_color=wr, hovertemplate="%{x}<br><b>%{y:+.1f}%</b><extra>" + v + "</extra>"))
-            if len(g_): fig.add_hline(y=float(g_.iloc[0]), line_dash="dash", line_width=2.5, line_color=C_TARGET, annotation_text="hujan GCM mentah", annotation_position="top left")
-            fig.add_hline(y=0, line_color="#555", line_width=1.5); fig.update_layout(barmode="group", yaxis_title="perubahan hujan (%)"); tampil(fig, 340)
-            pv = sm.pivot(index="model", columns="varian", values="delta_mu_pct"); gv = float(g_.iloc[0]) if len(g_) else float("nan")
-            teks = []
-            if VAR[0] in pv and VAR[1] in pv:
-                beda = [m for m in pv.index if np.sign(pv.loc[m, VAR[0]]) != np.sign(pv.loc[m, VAR[1]])]
-                teks.append(f"Tanpa pemotongan, tanda perubahan berbeda di {len(beda)} dari {len(pv)} model" + (f" ({', '.join(beda)})" if beda else "") + f"; selisih rata-rata {n(float((pv[VAR[1]] - pv[VAR[0]]).abs().mean()))} poin persen.")
-            if VAR[2] in pv: teks.append(f"Dengan prediktor stabil saja, {int((np.sign(pv[VAR[2]]) == np.sign(pv[VAR[0]])).sum())} dari {len(pv)} model tetap searah dengan versi dipotong.")
-            if np.isfinite(gv): teks.append(f"Hujan GCM mentah {n(gv, 1, True)}%; model dipotong searah dengannya di {int((np.sign(pv[VAR[0]]) == np.sign(gv)).sum())} dari {len(pv)} model.")
-            tdk = meta.get("prediktor_tidak_stabil")
-            if tdk: teks.append("Prediktor tidak stabil: " + ", ".join(tdk) + ".")
-            ins(" ".join(teks))
+            with st.expander("Uji sensitivitas pemotongan prediktor (untuk peneliti)"):
+                VAR = ["Dipotong (dipakai di dashboard)", "Tanpa pemotongan", "Hanya prediktor stabil"]
+                judul("Perubahan rata-rata hujan model (%)", "Bukan frekuensi kering. Prediktor GCM dipotong ke rentang ERA5 supaya model tidak mengekstrapolasi; di sini dibandingkan tiga perlakuan.")
+                sm = sens[sens["model"] != "Hujan GCM mentah"]; g2 = sens[sens["model"] == "Hujan GCM mentah"]["delta_mu_pct"]; fig = go.Figure()
+                for v, wr in zip(VAR, [TEAL, ORANYE, "#5c6bc0"]):
+                    dv = sm[sm["varian"] == v]
+                    if not dv.empty: fig.add_trace(go.Bar(x=dv["model"], y=dv["delta_mu_pct"], name=v, marker_color=wr, hovertemplate="%{x}<br><b>%{y:+.1f}%</b><extra>" + v + "</extra>"))
+                if len(g2): fig.add_hline(y=float(g2.iloc[0]), line_dash="dash", line_width=2.5, line_color=C_TARGET, annotation_text="hujan GCM mentah", annotation_position="top left")
+                fig.add_hline(y=0, line_color="#555", line_width=1.5); fig.update_layout(barmode="group", yaxis_title="perubahan hujan (%)"); tampil(fig, 320)
+                pv = sm.pivot(index="model", columns="varian", values="delta_mu_pct"); gv = float(g2.iloc[0]) if len(g2) else float("nan"); teks = []
+                if VAR[0] in pv and VAR[1] in pv:
+                    beda = [m for m in pv.index if np.sign(pv.loc[m, VAR[0]]) != np.sign(pv.loc[m, VAR[1]])]
+                    teks.append(f"Tanpa pemotongan, tanda perubahan berbeda di {len(beda)} dari {len(pv)} model" + (f" ({', '.join(beda)})" if beda else "") + f"; selisih rata-rata {n(float((pv[VAR[1]] - pv[VAR[0]]).abs().mean()))} poin persen.")
+                if VAR[2] in pv: teks.append(f"Dengan prediktor stabil saja, {int((np.sign(pv[VAR[2]]) == np.sign(pv[VAR[0]])).sum())} dari {len(pv)} model tetap searah dengan versi dipotong.")
+                if np.isfinite(gv): teks.append(f"Hujan GCM mentah {n(gv, 1, True)}%; model dipotong searah dengannya di {int((np.sign(pv[VAR[0]]) == np.sign(gv)).sum())} dari {len(pv)} model.")
+                if meta.get("prediktor_tidak_stabil"): teks.append("Prediktor tidak stabil: " + ", ".join(meta["prediktor_tidak_stabil"]) + ".")
+                ins(" ".join(teks))
 
 # ---------------- tab korelasi & validasi ----------------
 with tab_k:
