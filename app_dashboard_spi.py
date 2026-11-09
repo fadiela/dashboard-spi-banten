@@ -49,7 +49,7 @@ def muat_semua(folder_ver):
          "meta": json.load(open(jalur("dashboard_meta.json"), encoding="utf-8"))}
     for kunci, nama in [("b_reg", "dashboard_bulanan_regional.csv.gz"), ("b_grid", "dashboard_bulanan_per_grid.csv.gz"),
                         ("b_base", "dashboard_baseline_bulan_grid.csv.gz"), ("grid", "dashboard_grid.csv"),
-                        ("kor", "dashboard_korelasi.csv"), ("gerb", "dashboard_model_gerbang.csv"), ("sens", "dashboard_sensitivitas.csv")]:
+                        ("kor", "dashboard_korelasi.csv"), ("gerb", "dashboard_model_gerbang.csv"), ("sens", "dashboard_sensitivitas.csv"), ("banding", "dashboard_model_banding.csv")]:
         p = jalur(nama)
         d[kunci] = pd.read_csv(p) if os.path.exists(p) else None
     p = jalur("banten_kabkota.geojson")
@@ -186,6 +186,11 @@ with tab_ring:
     with c3.container(border=True): st.metric("Selisih", f"{n(sel, 1, True)} bulan per 100", delta="belum berarti" if kode == "sama" else ("lebih sering kering" if kode == "lebih" else "lebih jarang kering"), delta_color="off",
                                               help="Dianggap berarti bila lebih dari 2x galat baku kasar naik-turun antar-tahun.")
 
+    ref = float((meta.get("acuan_target_pct") or {}).get(skala, np.nan))
+    if np.isfinite(ref):
+        st.caption(f"Pengamatan nyata ({meta.get('target', 'CHIRPS')}, 1981-2010): sekitar **{n(ref, 0)} dari 100 bulan** kering." +
+                   (" Model melebihkan frekuensi bulan kering, jadi bandingkan **selisihnya**, bukan angka mutlaknya." if base - ref > 2 else ""))
+
     st.subheader("Rata-rata per lima tahun")
     st.caption("Per lima tahun supaya tidak terbaca sebagai ramalan tahun tertentu. Garis putus-putus = masa lalu 1981-2010.")
     r = r.assign(blok=(r["tahun"] - H0) // 5)
@@ -213,6 +218,28 @@ with tab_ring:
         fig.update_layout(yaxis_title="bulan kering dari 100 bulan"); tampil(fig, 320)
         st.caption(f"Paling sering kering: **{BULAN[int(prof.idxmax()) - 1]}** ({n(prof.max(), 0)} dari 100). Paling jarang: **{BULAN[int(prof.idxmin()) - 1]}** ({n(prof.min(), 0)} dari 100).")
 
+    ML = ["GLM Gamma", "Random Forest", "XGBoost", "Neural Net"]
+    selisih_model = {}
+    if D["banding"] is not None:
+        dm = D["banding"][(D["banding"]["SPI"] == skala) & D["banding"]["model"].isin(ML)]
+        for nm_, g_ in dm.groupby("model"):
+            if g_["baseline_model_sendiri_pct"].notna().any() and g_["n_bulan_valid"].sum() > 0:
+                selisih_model[nm_] = float(np.average(g_["kering_pct_mean"], weights=g_["n_bulan_valid"]) - g_["baseline_model_sendiri_pct"].dropna().iloc[0])
+    if len(selisih_model) >= 2:
+        utama = next((m_ for m_ in ML if m_ in str(meta.get("model", ""))), None)
+        tr = (meta.get("model_transfer_terbaik") or {}).get("model")
+        if tr is None and D["gerb"] is not None and {"c_kering_pct", "acuan_c"} <= set(D["gerb"].columns):
+            gg = D["gerb"].set_index("model"); tr = (gg["c_kering_pct"] - gg["acuan_c"]).abs().idxmin()
+        st.subheader("Apakah hasilnya tergantung pada model?")
+        st.caption("Tiap batang = selisih frekuensi bulan kering dibanding masa lalu, menurut modelnya masing-masing. Batang yang berbeda arah berarti hasilnya bergantung pada model.")
+        urut = sorted(selisih_model, key=selisih_model.get)
+        nama_ = [m_ + (" (dipakai)" if m_ == utama else " (paling dekat pengamatan)" if m_ == tr and m_ != utama else "") for m_ in urut]
+        fig = go.Figure(go.Bar(y=nama_, x=[selisih_model[m_] for m_ in urut], orientation="h", marker_color=[TEAL if m_ == utama else ORANYE if m_ == tr else ABU for m_ in urut],
+                               text=[n(selisih_model[m_], 1, True) for m_ in urut], textposition="outside", cliponaxis=False, hovertemplate="%{y}<br>%{x:+.1f} bulan per 100<extra></extra>"))
+        fig.add_vline(x=0, line_color="#555", line_width=1.2); fig.update_layout(xaxis_title="selisih bulan kering per 100 bulan (kanan = lebih sering kering)"); tampil(fig, 260, legenda=False)
+        arah = np.sign([v for v in selisih_model.values()])
+        st.caption("**Keempat model searah.**" if len(set(arah)) == 1 else "**Keempat model tidak sepakat arahnya**, jadi tidak ada perubahan yang bisa dipastikan. Model yang berwarna oranye hanya pembanding, bukan pengganti model utama." if tr != utama else "**Model tidak sepakat arahnya**, jadi tidak ada perubahan yang bisa dipastikan.")
+
     st.subheader("Seberapa bisa dipercaya?")
     ka = (meta.get("konsistensi_arah") or {}).get("jendela") or []
     jd = next((j for j in ka if j["jendela"] == f"{H0}-{H1}"), None)
@@ -222,7 +249,9 @@ with tab_ring:
            (bool(ho.get("lebih_baik_dari_klimatologi")) if ho else False, "Pada data uji 2021-2025 yang dikunci, model lebih baik daripada klimatologi biasa.",
             "Pada data uji 2021-2025 yang dikunci, model belum lebih baik daripada klimatologi biasa." if ho else "Data uji 2021-2025 belum tersedia di berkas hasil."),
            (jd is not None and not jd["berlawanan"], "Arah perubahan sejalan dengan hujan mentah model iklim.", "Arah perubahan hujan model <b>berlawanan</b> dengan hujan mentah model iklim; baca sebagai 'belum ada perubahan jelas'."),
-           (luar is not None and luar < 20, f"Hanya {n(luar or 0, 0)}% data masukan di luar rentang yang pernah dipelajari model.", f"{n(luar or 0, 0)}% data masukan di luar rentang yang pernah dipelajari model.")]
+           (luar is not None and luar < 10, f"Hanya {n(luar or 0, 0)}% data masukan di luar rentang yang pernah dipelajari model.", f"{n(luar or 0, 0)}% data masukan di luar rentang yang pernah dipelajari model."),
+           (np.isfinite(ref) and abs(base - ref) <= 3, "Frekuensi bulan kering di masa lalu menurut model dekat dengan pengamatan.", f"Frekuensi bulan kering di masa lalu menurut model {n(base, 0)} dari 100, sedangkan pengamatan {n(ref, 0) if np.isfinite(ref) else '-'}."),
+           (len(selisih_model) >= 2 and len(set(np.sign(list(selisih_model.values())))) == 1, "Keempat model memberi arah perubahan yang sama.", "Keempat model tidak sepakat arah perubahannya.")]
     for ok, ya, tidak in cek: st.markdown(f"{'✅' if ok else '⚠️'} {ya if ok else tidak}", unsafe_allow_html=True)
     st.caption("Karena itu, pakai dashboard ini sebagai gambaran kemungkinan, bukan angka pasti. Setelah 2050 data masukan makin jauh dari yang dipelajari model, sehingga proyeksi dihentikan di 2050.")
 
