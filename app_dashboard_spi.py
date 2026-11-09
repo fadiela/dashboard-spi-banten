@@ -9,37 +9,41 @@ import plotly.graph_objects as go
 
 # ------------------------------------------------------------------ pengaturan yang boleh diubah
 PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # kosongkan bila tak perlu
-H_PETA, H_KECIL = 470, 205          # tinggi grafik (px). Kecilkan bila layar kurang muat satu halaman
+H_PETA, H_KECIL = 345, 150          # tinggi grafik (px), diset untuk layar 1366x768. Layar lebih besar: naikkan (mis. 470 dan 205)
+UKURAN_TEKS = 14                    # px dasar seluruh tampilan (Streamlit memakai rem). Teks terlalu kecil/besar: ubah angka ini (13-16)
 st.set_page_config(page_title="Bulan kering Banten 2026-2050", page_icon="🌧️", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""<style>
+html {font-size: __UT__px;}
 .stApp {background:#f3f5f8;}
 header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"] {display:none !important;}
-.block-container {padding:.6rem 1.2rem .3rem; max-width:100%;}
-[data-testid="stVerticalBlock"] {gap:.4rem;}
-.ttl {font-size:1.3rem; font-weight:700; color:#1d2b3a; line-height:1.15;}
-.sub {font-size:.74rem; color:#6b7785;}
-.flabel {font-size:.64rem; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.05em; margin:0 0 -.55rem;}
-.ph {font-size:.7rem; font-weight:700; color:#55606e; text-transform:uppercase; letter-spacing:.05em; margin-bottom:-.2rem;}
-.tile {background:#fff; border:1px solid #e1e5ea; border-top:4px solid var(--c); border-radius:8px; padding:7px 12px 8px; min-height:112px;}
-.tile .k {font-size:.66rem; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.05em;}
-.tile .v {font-size:1.85rem; font-weight:700; color:#1d2b3a; line-height:1.15;}
-.tile .v small {font-size:.78rem; font-weight:500; color:#6b7785;}
-.tile .s {font-size:.72rem; color:#6b7785; margin-top:1px;}
-.chip {display:inline-block; padding:1px 9px; border-radius:10px; font-size:.7rem; font-weight:700; color:#fff; margin-top:3px;}
+.block-container {padding:.45rem .8rem .2rem; max-width:100%;}
+[data-testid="stVerticalBlock"] {gap:.3rem;}
+div[data-baseweb="select"] > div {min-height:30px;}
+.ttl {font-size:1.3rem; font-weight:700; color:#1d2b3a; line-height:1.15; white-space:nowrap;}
+.sub {font-size:.72rem; color:#6b7785; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.flabel {font-size:.65rem; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; margin:0 0 -.7rem;}
+.ph {font-size:.72rem; font-weight:700; color:#55606e; text-transform:uppercase; letter-spacing:.04em; margin:-.1rem 0 -.45rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.tile {background:#fff; border:1px solid #e1e5ea; border-top:3px solid var(--c); border-radius:7px; padding:4px 9px 5px; min-height:80px; overflow:hidden;}
+.tile .k {font-size:.68rem; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.tile .v {font-size:1.7rem; font-weight:700; color:#1d2b3a; line-height:1.15; white-space:nowrap;}
+.tile .v small {font-size:.72rem; font-weight:500; color:#6b7785;}
+.tile .s {font-size:.72rem; color:#6b7785; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.chip {display:inline-block; padding:0 8px; border-radius:9px; font-size:.68rem; font-weight:700; color:#fff; margin-top:2px; white-space:nowrap;}
 .red {background:#d1495b;} .blue {background:#2a6f97;} .gray {background:#8d99a6;} .amber {background:#e0912b;} .green {background:#2a9d8f;}
-.dot {display:inline-block; width:11px; height:11px; border-radius:50%; margin:3px 4px 0 0; background:#d9dee4;}
+.dot {display:inline-block; width:10px; height:10px; border-radius:50%; margin:3px 4px 0 0; background:#d9dee4;}
 .dot.ok {background:#2a9d8f;} .dot.no {background:#e0912b;}
-.ins {display:inline-block; font-size:.78rem; color:#33404d; background:#fff; border:1px solid #e1e5ea; border-radius:14px; padding:2px 11px 2px 8px; margin:0 6px 0 0;}
-.ins i {display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px;}
-.foot {font-size:.66rem; color:#8794a3; margin-top:2px;}
-</style>""", unsafe_allow_html=True)
+.insrow {white-space:nowrap; overflow:hidden;}
+.ins {display:inline-block; font-size:.78rem; color:#33404d; background:#fff; border:1px solid #e1e5ea; border-radius:12px; padding:1px 9px 1px 7px; margin:0 5px 0 0;}
+.ins i {display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px;}
+.foot {font-size:.68rem; color:#8794a3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+</style>""".replace("__UT__", str(UKURAN_TEKS)), unsafe_allow_html=True)
 
 PROY, BASE, ABU = "#2f6f8f", "#e8833a", "#b9c2cc"
 WARNA_CHIP = {"red": "#d1495b", "blue": "#2a6f97", "gray": "#8d99a6", "amber": "#e0912b", "green": "#2a9d8f"}
 KERING = [[0, "#fff5e0"], [0.35, "#fdd49e"], [0.7, "#f08a4b"], [1, "#a8281a"]]
 BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 PRESET = {"Sepanjang tahun": list(range(1, 13)), "Des-Feb": [12, 1, 2], "Mar-Mei": [3, 4, 5], "Jun-Agu": [6, 7, 8], "Sep-Nov": [9, 10, 11]}
-NAMA_SKALA = {"SPI-3": "3 bulan", "SPI-6": "6 bulan", "SPI-12": "12 bulan"}
+NAMA_SKALA = {"SPI-3": "3 bln", "SPI-6": "6 bln", "SPI-12": "12 bln"}
 ML = ["GLM Gamma", "Random Forest", "XGBoost", "Neural Net"]
 
 # ------------------------------------------------------------------ data
@@ -91,6 +95,12 @@ def _dalam(px, py, ring):
     return d
 
 
+def nama_pendek(idx):
+    """Buang awalan Kab./Kota; bila nama kembar (Tangerang, Serang) beri akhiran (Kab)/(Kota)."""
+    inti = [x.replace("Kab. ", "").replace("Kota ", "") for x in idx]
+    return [k + (" (Kab)" if x.startswith("Kab.") else " (Kota)") if inti.count(k) > 1 else k for k, x in zip(inti, idx)]
+
+
 @st.cache_resource
 def wilayah_grid(ver):
     gr = D["grid"].sort_values("grid_id").reset_index(drop=True); nama = pd.Series([None] * len(gr), dtype=object); lab = []
@@ -105,26 +115,27 @@ def wilayah_grid(ver):
             dalam |= m; luas = np.ptp(ext[:, 0]) * np.ptp(ext[:, 1])
             if besar is None or luas > besar[0]: besar = (luas, ext[:, 0].mean(), ext[:, 1].mean())
         nama[dalam & nama.isna().to_numpy()] = nm
-        if besar: lab.append((nm.replace("Kab. ", "").replace("Kota ", ""), besar[1], besar[2]))
-    return gr.assign(wilayah=nama.to_numpy()), pd.DataFrame(lab, columns=["nama", "lon", "lat"])
+        if besar: lab.append((nm, besar[1], besar[2]))
+    lab = pd.DataFrame(lab, columns=["nama", "lon", "lat"]); lab["nama"] = nama_pendek(lab["nama"].tolist())
+    return gr.assign(wilayah=nama.to_numpy()), lab
 
 
 def buat_peta(df, kol, zmin, zmax, satuan, warna, lab, zmid=None):
     xs, ys = np.unique(df["lon"].round(4)), np.unique(df["lat"].round(4)); h = float(np.median(np.diff(xs)) / 2) if len(xs) > 1 else 0.025
     kotak = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": str(int(g)), "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[lo - h, la - h], [lo + h, la - h], [lo + h, la + h], [lo - h, la + h], [lo - h, la - h]]]}} for g, lo, la in zip(df["grid_id"], df["lon"], df["lat"])]}
     fig = go.Figure(go.Choroplethmap(geojson=kotak, locations=df["grid_id"].astype(int).astype(str), z=df[kol], text=df["wilayah"].fillna("Di luar batas kab/kota"), colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid,
-                                     marker=dict(opacity=0.88, line=dict(width=0)), colorbar=dict(title=dict(text=satuan, font=dict(size=10)), thickness=9, len=0.55, tickfont=dict(size=10), x=0.99),
+                                     marker=dict(opacity=0.88, line=dict(width=0)), colorbar=dict(title=dict(text="", font=dict(size=9)), thickness=8, len=0.5, tickfont=dict(size=9), x=0.995),
                                      hovertemplate="<b>%{text}</b><br>%{z:.1f} " + satuan + "<extra></extra>"))
     zoom = float(np.clip(np.log2(500 / 256 * 360 / (max(xs.max() - xs.min(), 0.2) * 1.2)) - 0.1, 5, 11))
     lay = dict(style="carto-positron", center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom)
     if gj is not None: lay["layers"] = [dict(sourcetype="geojson", source=gj, type="line", color="#33474a", line=dict(width=1.3), below="")]
     fig.update_layout(map=lay)
-    if len(lab): fig.add_trace(go.Scattermap(lon=lab["lon"], lat=lab["lat"], mode="text", text=lab["nama"], textfont=dict(size=11, color="#1d2b3a"), hoverinfo="skip", showlegend=False))
+    if len(lab): fig.add_trace(go.Scattermap(lon=lab["lon"], lat=lab["lat"], mode="text", text=lab["nama"], textfont=dict(size=9, color="#1d2b3a"), hoverinfo="skip", showlegend=False))
     return fig
 
 
 def gambar(fig, h, legenda=False):
-    fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=11, color="#33404d"), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, legend=dict(orientation="h", y=1.14, x=0, font_size=10))
+    fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=10, color="#33404d"), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, uniformtext=dict(minsize=8, mode="hide"), legend=dict(orientation="h", y=1.14, x=0, font_size=9))
     fig.update_xaxes(showgrid=False, linecolor="#c8cfd8"); fig.update_yaxes(gridcolor="#eef1f4", zeroline=False)
     cfg = dict(displaylogo=False, displayModeBar=False)
     try: st.plotly_chart(fig, width="stretch", config=cfg)
@@ -183,9 +194,9 @@ if str(st.query_params.get("catatan", "")) in ("1", "true", "ya"): halaman_catat
 gr_ref, LAB = wilayah_grid(len(D["grid"]))
 th_all = sorted(D["b_grid"]["tahun"].unique().tolist())
 
-c_t, c_s, c_m, c_y, c_p = st.columns([2.6, 1.5, 1.25, 1.8, 1.7], gap="small")
-c_t.markdown(f'<div class="ttl">Bulan kering di Banten, {H0}-{H1}</div><div class="sub">Proyeksi satu model iklim (bukan ramalan) vs masa lalu 1981-2010 · bulan kering = hujan jauh di bawah normal (SPI ≤ -1)</div>', unsafe_allow_html=True)
-with c_s: st.markdown('<div class="flabel">Jangka kekeringan</div>', unsafe_allow_html=True); skala = pilih(list(meta["spi_skala"]), "skala", fmt=lambda s: NAMA_SKALA.get(s, s))
+c_t, c_s, c_m, c_y, c_p = st.columns([2.3, 1.45, 1.2, 1.9, 1.5], gap="small")
+c_t.markdown(f'<div class="ttl">Bulan kering di Banten {H0}-{H1}</div><div class="sub">1 model iklim vs 1981-2010 · bukan ramalan · kering = SPI ≤ -1</div>', unsafe_allow_html=True)
+with c_s: st.markdown('<div class="flabel">Jangka</div>', unsafe_allow_html=True); skala = pilih(list(meta["spi_skala"]), "skala", fmt=lambda s: NAMA_SKALA.get(s, s))
 with c_m: st.markdown('<div class="flabel">Bulan / musim</div>', unsafe_allow_html=True); musim = st.selectbox("musim", list(PRESET), label_visibility="collapsed")
 with c_y: st.markdown('<div class="flabel">Rentang tahun</div>', unsafe_allow_html=True); t0, t1 = st.select_slider("tahun", th_all, value=(th_all[0], th_all[-1]), label_visibility="collapsed")
 with c_p: st.markdown('<div class="flabel">Peta menampilkan</div>', unsafe_allow_html=True); mode = pilih(["Kering", "Selisih"], "mode_peta")
@@ -223,57 +234,58 @@ def tile(k, v, kecil, s, chip, cls, warna):
 ch_sel = {"sama": ("BELUM PASTI", "gray"), "lebih": ("LEBIH SERING KERING", "red"), "kurang": ("LEBIH JARANG KERING", "blue"), "sedikit": ("DATA SEDIKIT", "gray")}[kode]
 ch_mod = ("SEPAKAT", "green") if len(tanda) and n_searah == len(tanda) else ("CONDONG", "amber") if len(tanda) and n_searah == len(tanda) - 1 else ("TERPECAH", "red") if len(tanda) else ("-", "gray")
 k1, k2, k3, k4, k5 = st.columns(5, gap="small")
-k1.markdown(tile("Masa lalu 1981-2010 (model)", n(base, 0), "dari 100 bulan", f"pengamatan nyata: {n(ref, 0)}", "MODEL MELEBIHKAN" if base - ref > 3 else "DEKAT PENGAMATAN", "amber" if base - ref > 3 else "green", "#e8833a"), unsafe_allow_html=True)
-k2.markdown(tile(f"Proyeksi {t0}-{t1}", n(proy, 0), "dari 100 bulan", f"{musim.lower()} · {NAMA_SKALA.get(skala, skala)}", "RATA-RATA ENSEMBLE", "gray", PROY), unsafe_allow_html=True)
-k3.markdown(tile("Selisih vs masa lalu", n(sel, 1, True), "bulan per 100", "model yang sama", *ch_sel, WARNA_CHIP[ch_sel[1]]), unsafe_allow_html=True)
-k4.markdown(tile("Searah antar model", f"{n_searah}/{len(tanda)}" if len(tanda) else "-", "model", f"rentang {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}" if selisih_model else "data model tidak ada", *ch_mod, WARNA_CHIP[ch_mod[1]]), unsafe_allow_html=True)
+k1.markdown(tile("Masa lalu (model)", n(base, 0), "dari 100 bulan", f"pengamatan nyata: {n(ref, 0)}", "MODEL MELEBIHKAN" if base - ref > 3 else "DEKAT PENGAMATAN", "amber" if base - ref > 3 else "green", "#e8833a"), unsafe_allow_html=True)
+k2.markdown(tile(f"Proyeksi {t0}-{t1}", n(proy, 0), "dari 100 bulan", f"{musim.lower()} · {NAMA_SKALA.get(skala, skala)}", "ENSEMBLE", "gray", PROY), unsafe_allow_html=True)
+k3.markdown(tile("Selisih", n(sel, 1, True), "bulan/100", "vs masa lalu model", *ch_sel, WARNA_CHIP[ch_sel[1]]), unsafe_allow_html=True)
+k4.markdown(tile("Searah antar model", f"{n_searah}/{len(tanda)}" if len(tanda) else "-", "model", f"selisih {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}" if selisih_model else "data model tidak ada", *ch_mod, WARNA_CHIP[ch_mod[1]]), unsafe_allow_html=True)
 titik = "".join(f'<span class="dot {"ok" if ok else "no"}" title="{"✓" if ok else "✗"} {t}"></span>' for t, ok in cek)
-k5.markdown(f'<div class="tile" style="--c:{WARNA_CHIP[yak_c]}"><div class="k">Keyakinan</div><div class="v">{yak}</div><div class="s">{n_ok} dari 6 syarat terpenuhi (arahkan kursor ke titik)</div>{titik}</div>', unsafe_allow_html=True)
+k5.markdown(f'<div class="tile" style="--c:{WARNA_CHIP[yak_c]}"><div class="k">Keyakinan</div><div class="v">{yak}</div><div class="s">{n_ok}/6 syarat · arahkan kursor</div>{titik}</div>', unsafe_allow_html=True)
 
 # ---- peta & agregasi grid
 agg = gs.groupby("grid_id")["p_kering"].mean().mul(100).rename("p_kering").reset_index().merge(bs.groupby("grid_id")["kering_model_pct"].mean().reset_index(), on="grid_id").merge(gr_ref, on="grid_id")
 agg["selisih"] = agg["p_kering"] - agg["kering_model_pct"]; agg_in = agg[agg["wilayah"].notna()] if gj is not None else agg
 rk = agg_in.dropna(subset=["wilayah"]).groupby("wilayah")[["p_kering", "kering_model_pct"]].mean().sort_values("p_kering") if gj is not None else pd.DataFrame()
+if len(rk): rk.index = nama_pendek(rk.index.tolist())
 prof = G[G["tahun"].between(t0, t1)].groupby("bulan")["p_kering"].mean().mul(100); pb = B.groupby("bulan")["kering_model_pct"].mean().reindex(prof.index)
 
 # ---- baris insight (kata singkat + warna)
-ins = [({"sama": "gray", "lebih": "red", "kurang": "blue", "sedikit": "gray"}[kode], {"sama": f"Selisih {n(sel, 1, True)}: masih naik-turun alami", "lebih": f"Lebih sering kering ({n(sel, 1, True)})", "kurang": f"Lebih jarang kering ({n(sel, 1, True)})", "sedikit": "Data terlalu sedikit"}[kode]),
-       ("amber" if base - ref > 3 else "green", f"Model melebihkan: {n(base, 0)} vs {n(ref, 0)} nyata" if base - ref > 3 else "Model dekat pengamatan")]
-if selisih_model: ins.append((ch_mod[1], "Keempat model searah" if ch_mod[0] == "SEPAKAT" else f"Model terpecah: {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}"))
-ins.append(("gray", f"Paling rawan: {BULAN[int(prof.idxmax()) - 1]}" + (f" · {rk.index[-1]}" if len(rk) else "")))
-st.markdown("".join(f'<span class="ins"><i style="background:{WARNA_CHIP[c]}"></i>{t}</span>' for c, t in ins), unsafe_allow_html=True)
+ins = [({"sama": "gray", "lebih": "red", "kurang": "blue", "sedikit": "gray"}[kode], {"sama": f"Selisih {n(sel, 1, True)}: belum pasti", "lebih": f"Lebih sering kering ({n(sel, 1, True)})", "kurang": f"Lebih jarang kering ({n(sel, 1, True)})", "sedikit": "Data terlalu sedikit"}[kode]),
+       ("amber" if base - ref > 3 else "green", f"Model melebihkan: {n(base, 0)} vs {n(ref, 0)}" if base - ref > 3 else "Model dekat pengamatan")]
+if selisih_model: ins.append((ch_mod[1], "Model sepakat" if ch_mod[0] == "SEPAKAT" else f"Model terpecah: {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}"))
+ins.append(("gray", f"Rawan: {BULAN[int(prof.idxmax()) - 1]}" + (f" · {rk.index[-1]}" if len(rk) else "")))
+st.markdown('<div class="insrow">' + "".join(f'<span class="ins"><i style="background:{WARNA_CHIP[c]}"></i>{t}</span>' for c, t in ins) + "</div>", unsafe_allow_html=True)
 
 # ---- grid panel
 col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
 with col_peta, st.container(border=True):
-    st.markdown(f'<div class="ph">Peta · {"seberapa sering kering" if mode == "Kering" else "selisih vs masa lalu"} (per 100 bulan)</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="ph">Peta · {"bulan kering per 100" if mode == "Kering" else "selisih vs masa lalu"}</div>', unsafe_allow_html=True)
     if mode == "Kering": fig = buat_peta(agg_in, "p_kering", 0, max(20.0, float(np.ceil(np.nanpercentile(agg_in["p_kering"], 98) / 10) * 10)), "dari 100", KERING, LAB)
     else: lim = max(5.0, float(np.ceil(np.nanpercentile(agg_in["selisih"].abs(), 98) / 5) * 5)); fig = buat_peta(agg_in, "selisih", -lim, lim, "selisih", "RdBu_r", LAB, zmid=0)
     gambar(fig, H_PETA)
 with col_b:
     with st.container(border=True):
-        st.markdown('<div class="ph">Per 5 tahun · proyeksi vs masa lalu</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ph">Per 5 tahun · garis = masa lalu</div>', unsafe_allow_html=True)
         blok = per_th.groupby((per_th.index - t0) // 5).agg(["mean", lambda s: s.index.min(), lambda s: s.index.max()]); blok.columns = ["v", "a", "b"]
-        fig = go.Figure(go.Bar(x=[f"{int(a)}-{str(int(b))[2:]}" for a, b in zip(blok["a"], blok["b"])], y=blok["v"], marker_color=PROY, text=[n(v, 0) for v in blok["v"]], textposition="outside", cliponaxis=False, hovertemplate="%{x}<br>%{y:.1f} dari 100<extra></extra>"))
-        fig.add_hline(y=base, line_dash="dot", line_color=BASE, line_width=2.5, annotation_text=f"masa lalu {n(base, 0)}", annotation_font_size=10, annotation_position="top left")
+        fig = go.Figure(go.Bar(x=[f"{str(int(a))[2:]}-{str(int(b))[2:]}" for a, b in zip(blok["a"], blok["b"])], y=blok["v"], marker_color=PROY, text=[n(v, 0) for v in blok["v"]], textposition="outside", textfont_size=9, cliponaxis=False, hovertemplate="%{x}<br>%{y:.1f} dari 100<extra></extra>"))
+        fig.add_hline(y=base, line_dash="dot", line_color=BASE, line_width=2.5)
         fig.update_layout(yaxis_range=[0, max(blok["v"].max(), base) * 1.35]); gambar(fig, H_KECIL)
     with st.container(border=True):
-        st.markdown('<div class="ph">Tergantung model? · selisih vs masa lalu menurut tiap model</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ph">Tergantung model? ★ dipakai ◆ dekat data</div>', unsafe_allow_html=True)
         if len(selisih_model) >= 2:
             urut = sorted(selisih_model, key=selisih_model.get); nama_ = [m_ + (" ★" if m_ == utama else " ◆" if m_ == tr and m_ != utama else "") for m_ in urut]
-            fig = go.Figure(go.Bar(y=nama_, x=[selisih_model[m_] for m_ in urut], orientation="h", marker_color=[PROY if m_ == utama else BASE if m_ == tr else ABU for m_ in urut], text=[n(selisih_model[m_], 1, True) for m_ in urut], textposition="outside", cliponaxis=False))
-            fig.add_vline(x=0, line_color="#555", line_width=1.2); fig.update_layout(xaxis_title="★ dipakai · ◆ paling dekat pengamatan · kanan = lebih sering kering", xaxis_title_font_size=9); gambar(fig, H_KECIL)
+            fig = go.Figure(go.Bar(y=nama_, x=[selisih_model[m_] for m_ in urut], orientation="h", marker_color=[PROY if m_ == utama else BASE if m_ == tr else ABU for m_ in urut], text=[n(selisih_model[m_], 1, True) for m_ in urut], textposition="outside", textfont_size=9, cliponaxis=False))
+            fig.add_vline(x=0, line_color="#555", line_width=1.2); fig.update_xaxes(zeroline=False); gambar(fig, H_KECIL)
         else: st.caption("Data perbandingan model belum ada.")
 with col_c:
     with st.container(border=True):
-        st.markdown('<div class="ph">Bulan rawan · terang = bulan terpilih</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ph">Bulan rawan · gelap = terpilih</div>', unsafe_allow_html=True)
         fig = go.Figure(go.Bar(x=[BULAN[b - 1] for b in prof.index], y=prof.values, marker_color=[PROY if b in bulan else "#b8cfdd" for b in prof.index], hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>proyeksi</extra>"))
-        fig.add_trace(go.Scatter(x=[BULAN[b - 1] for b in pb.index], y=pb.values, mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>masa lalu</extra>")); gambar(fig, H_KECIL)
+        fig.add_trace(go.Scatter(x=[BULAN[b - 1] for b in pb.index], y=pb.values, mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>masa lalu</extra>")); fig.update_xaxes(tickvals=[BULAN[b - 1] for b in prof.index], ticktext=[BULAN[b - 1][0] for b in prof.index]); gambar(fig, H_KECIL)
     with st.container(border=True):
-        st.markdown('<div class="ph">Per kabupaten/kota · ◆ = masa lalu</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ph">Kab/kota · ◆ = masa lalu</div>', unsafe_allow_html=True)
         if len(rk):
-            fig = go.Figure(go.Bar(y=rk.index, x=rk["p_kering"], orientation="h", marker_color=PROY, text=[n(v, 0) for v in rk["p_kering"]], textposition="outside", cliponaxis=False, hovertemplate="%{y}<br>%{x:.1f} dari 100<extra></extra>"))
+            fig = go.Figure(go.Bar(y=rk.index, x=rk["p_kering"], orientation="h", marker_color=PROY, text=[n(v, 0) for v in rk["p_kering"]], textposition="outside", textfont_size=9, cliponaxis=False, hovertemplate="%{y}<br>%{x:.1f} dari 100<extra></extra>"))
             fig.add_trace(go.Scatter(y=rk.index, x=rk["kering_model_pct"], mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{y}<br>masa lalu %{x:.1f}<extra></extra>")); gambar(fig, H_KECIL)
         else: st.caption("Batas kab/kota belum tersedia.")
 
-st.markdown(f'<div class="foot">Sumber: {meta.get("gcm")} ({meta.get("skenario")}) diperhalus dengan model statistik · acuan pengamatan {meta.get("target")} · dijalankan {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca.{" · " + PEMBUAT if PEMBUAT else ""}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="foot">{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca.{" · " + PEMBUAT if PEMBUAT else ""}</div>', unsafe_allow_html=True)
