@@ -1,72 +1,73 @@
-"""Dashboard proyeksi kekeringan Banten 2026-2050 (versi bersih untuk orang awam).
+"""Dashboard satu layar: proyeksi bulan kering Banten 2026-2050 (gaya Tableau).
 Jalankan:  streamlit run app_dashboard_spi.py
-Berkas data (hasil ekspor notebook 14d-14i) harus ada di folder yang sama dengan berkas ini,
-atau tunjuk foldernya lewat variabel lingkungan HASIL_DIR.
+Halaman catatan (penjelasan untuk pemahaman sendiri, tidak untuk ditampilkan):  tambahkan ?catatan=1 di alamat.
+Berkas data (hasil ekspor notebook 14d-14i) harus ada di folder yang sama, atau tunjuk lewat variabel lingkungan HASIL_DIR.
 """
 import json, os
 import numpy as np, pandas as pd, streamlit as st
 import plotly.graph_objects as go
 
-# ------------------------------------------------------------------ identitas (ubah di sini)
-PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # tampil kecil di bagian bawah; kosongkan bila tak perlu
-
-st.set_page_config(page_title="Kekeringan Banten 2026-2050", page_icon="🌧️", layout="wide")
+# ------------------------------------------------------------------ pengaturan yang boleh diubah
+PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # kosongkan bila tak perlu
+H_PETA, H_KECIL = 470, 205          # tinggi grafik (px). Kecilkan bila layar kurang muat satu halaman
+st.set_page_config(page_title="Bulan kering Banten 2026-2050", page_icon="🌧️", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""<style>
-.block-container {max-width: 1180px; padding-top: 2.2rem;}
-.hero {background: #e8f4f3; border-left: 6px solid #0f766e; border-radius: 10px; padding: 16px 20px; font-size: 1.15rem; line-height: 1.55;}
-.hero b {color: #0b5a54;}
-.kecil {color: #5d6b6c; font-size: 0.88rem;}
-button[data-baseweb="tab"] p {font-weight: 600; font-size: 1.02rem;}
+.stApp {background:#f3f5f8;}
+header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"] {display:none !important;}
+.block-container {padding:.6rem 1.2rem .3rem; max-width:100%;}
+[data-testid="stVerticalBlock"] {gap:.4rem;}
+.ttl {font-size:1.3rem; font-weight:700; color:#1d2b3a; line-height:1.15;}
+.sub {font-size:.74rem; color:#6b7785;}
+.flabel {font-size:.64rem; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.05em; margin:0 0 -.55rem;}
+.ph {font-size:.7rem; font-weight:700; color:#55606e; text-transform:uppercase; letter-spacing:.05em; margin-bottom:-.2rem;}
+.tile {background:#fff; border:1px solid #e1e5ea; border-top:4px solid var(--c); border-radius:8px; padding:7px 12px 8px; min-height:112px;}
+.tile .k {font-size:.66rem; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.05em;}
+.tile .v {font-size:1.85rem; font-weight:700; color:#1d2b3a; line-height:1.15;}
+.tile .v small {font-size:.78rem; font-weight:500; color:#6b7785;}
+.tile .s {font-size:.72rem; color:#6b7785; margin-top:1px;}
+.chip {display:inline-block; padding:1px 9px; border-radius:10px; font-size:.7rem; font-weight:700; color:#fff; margin-top:3px;}
+.red {background:#d1495b;} .blue {background:#2a6f97;} .gray {background:#8d99a6;} .amber {background:#e0912b;} .green {background:#2a9d8f;}
+.dot {display:inline-block; width:11px; height:11px; border-radius:50%; margin:3px 4px 0 0; background:#d9dee4;}
+.dot.ok {background:#2a9d8f;} .dot.no {background:#e0912b;}
+.ins {display:inline-block; font-size:.78rem; color:#33404d; background:#fff; border:1px solid #e1e5ea; border-radius:14px; padding:2px 11px 2px 8px; margin:0 6px 0 0;}
+.ins i {display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px;}
+.foot {font-size:.66rem; color:#8794a3; margin-top:2px;}
 </style>""", unsafe_allow_html=True)
 
-# ------------------------------------------------------------------ warna dan teks
-TEAL, ORANYE, ABU, ABU_TUA = "#0f766e", "#e07a1f", "#b8c0c4", "#6b777a"
-SKALA_WARNA_KERING = [[0, "#fff8ec"], [0.35, "#fdd9a0"], [0.7, "#f08a4b"], [1, "#b23a1a"]]
+PROY, BASE, ABU = "#2f6f8f", "#e8833a", "#b9c2cc"
+WARNA_CHIP = {"red": "#d1495b", "blue": "#2a6f97", "gray": "#8d99a6", "amber": "#e0912b", "green": "#2a9d8f"}
+KERING = [[0, "#fff5e0"], [0.35, "#fdd49e"], [0.7, "#f08a4b"], [1, "#a8281a"]]
 BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 PRESET = {"Sepanjang tahun": list(range(1, 13)), "Des-Feb": [12, 1, 2], "Mar-Mei": [3, 4, 5], "Jun-Agu": [6, 7, 8], "Sep-Nov": [9, 10, 11]}
-NAMA_SKALA = {"SPI-3": "Jangka pendek (3 bulan)", "SPI-6": "Satu musim (6 bulan)", "SPI-12": "Satu tahun (12 bulan)"}
-PENJELASAN_SKALA = {"SPI-3": "Cepat bereaksi terhadap kurang hujan; relevan untuk tanaman.",
-                    "SPI-6": "Gambaran kekeringan satu musim.",
-                    "SPI-12": "Kekeringan panjang; relevan untuk air tanah dan waduk."}
-KATEGORI = pd.DataFrame({"Nilai SPI": ["2,0 atau lebih", "1,0 sampai 1,99", "-0,99 sampai 0,99", "-1,0 sampai -1,49", "-1,5 sampai -1,99", "-2,0 atau kurang"],
-                         "Artinya": ["Sangat basah", "Basah", "Normal", "Kering", "Sangat kering", "Kering ekstrem"],
-                         "Dihitung 'bulan kering'?": ["Tidak", "Tidak", "Tidak", "Ya", "Ya", "Ya"]}).set_index("Nilai SPI")
+NAMA_SKALA = {"SPI-3": "3 bulan", "SPI-6": "6 bulan", "SPI-12": "12 bulan"}
+ML = ["GLM Gamma", "Random Forest", "XGBoost", "Neural Net"]
 
-
-# ------------------------------------------------------------------ pembaca data
+# ------------------------------------------------------------------ data
 FOLDER = os.environ.get("HASIL_DIR") or os.path.dirname(os.path.abspath(__file__))
 
 
 def jalur(nama):
-    p = os.path.join(FOLDER, nama)
-    alt = os.path.join(FOLDER, nama.replace(".csv.gz", "_csv.gz"))
+    p, alt = os.path.join(FOLDER, nama), os.path.join(FOLDER, nama.replace(".csv.gz", "_csv.gz"))
     return p if os.path.exists(p) or not os.path.exists(alt) else alt
 
 
-@st.cache_data
-def muat_semua(folder_ver):
-    d = {"reg": pd.read_csv(jalur("dashboard_tahunan_regional.csv")),
-         "meta": json.load(open(jalur("dashboard_meta.json"), encoding="utf-8"))}
-    for kunci, nama in [("b_reg", "dashboard_bulanan_regional.csv.gz"), ("b_grid", "dashboard_bulanan_per_grid.csv.gz"),
-                        ("b_base", "dashboard_baseline_bulan_grid.csv.gz"), ("grid", "dashboard_grid.csv"),
-                        ("kor", "dashboard_korelasi.csv"), ("gerb", "dashboard_model_gerbang.csv"), ("sens", "dashboard_sensitivitas.csv"), ("banding", "dashboard_model_banding.csv")]:
-        p = jalur(nama)
-        d[kunci] = pd.read_csv(p) if os.path.exists(p) else None
-    p = jalur("banten_kabkota.geojson")
-    d["gj"] = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else None
+@st.cache_resource
+def muat(ver):
+    d = {"meta": json.load(open(jalur("dashboard_meta.json"), encoding="utf-8"))}
+    for k, nm in [("b_grid", "dashboard_bulanan_per_grid.csv.gz"), ("b_base", "dashboard_baseline_bulan_grid.csv.gz"), ("grid", "dashboard_grid.csv"),
+                  ("banding", "dashboard_model_banding.csv"), ("gerb", "dashboard_model_gerbang.csv")]:
+        d[k] = pd.read_csv(jalur(nm)) if os.path.exists(jalur(nm)) else None
+    d["gj"] = json.load(open(jalur("banten_kabkota.geojson"), encoding="utf-8")) if os.path.exists(jalur("banten_kabkota.geojson")) else None
     return d
 
 
-try:
-    D = muat_semua(tuple(sorted(os.listdir(FOLDER))))
-except FileNotFoundError as e:
-    st.error(f"Berkas data tidak ditemukan: {e.filename}. Letakkan hasil ekspor notebook (14d-14i) di folder yang sama dengan aplikasi ini.")
-    st.stop()
-reg, meta, gj = D["reg"], D["meta"], D["gj"]
+try: D = muat(tuple(sorted((f, os.path.getmtime(os.path.join(FOLDER, f))) for f in os.listdir(FOLDER) if f.startswith("dashboard_") or f.endswith(".geojson"))))
+except FileNotFoundError as e: st.error(f"Berkas data tidak ditemukan: {e.filename}"); st.stop()
+meta, gj = D["meta"], D["gj"]
 H0, H1 = int(meta["horizon"][0]), int(meta["horizon"][1])
+if D["b_grid"] is None or D["b_base"] is None or D["grid"] is None: st.error("Berkas ekspor bulanan/per-grid (sel 14e) belum ada."); st.stop()
 
 
-# ------------------------------------------------------------------ pembantu
 def n(x, d=1, plus=False):
     s = f"{x:+.{d}f}" if plus else f"{x:.{d}f}"
     return s.replace(".", ",")
@@ -77,278 +78,202 @@ def se_kasar(v):
     return float(v.std(ddof=1) / np.sqrt(len(v))) if len(v) >= 3 else float("nan")
 
 
-def tafsir(selisih, se):
-    """Selisih dianggap berarti bila lebih dari 2x galat baku kasar naik-turun antar-tahun."""
+def tafsir(sel, se):
     if not np.isfinite(se): return "sedikit"
-    if abs(selisih) < 2 * se: return "sama"
-    return "lebih" if selisih > 0 else "kurang"
+    return "sama" if abs(sel) < 2 * se else ("lebih" if sel > 0 else "kurang")
 
 
-KALIMAT = {"sama": "Selisihnya masih dalam naik-turun alami antar-tahun, jadi <b>belum ada perubahan yang bisa dipastikan</b>.",
-           "lebih": "Bulan kering diproyeksikan <b>lebih sering</b> dari masa lalu.",
-           "kurang": "Bulan kering diproyeksikan <b>lebih jarang</b> dari masa lalu.",
-           "sedikit": "Data terlalu sedikit untuk disimpulkan."}
+# ------------------------------------------------------------------ peta (pembantu)
+def _dalam(px, py, ring):
+    x, y = ring[:, 0], ring[:, 1]; d = np.zeros(px.shape, bool)
+    for xi, yi, xj, yj in zip(x, y, np.roll(x, -1), np.roll(y, -1)):
+        if yi != yj: d ^= ((yi > py) != (yj > py)) & (px < (xj - xi) * (py - yi) / (yj - yi) + xi)
+    return d
 
 
-def tampil(fig, tinggi=360, legenda=True):
-    fig.update_layout(height=tinggi, margin=dict(l=8, r=8, t=10, b=8), font=dict(size=13), separators=",.", plot_bgcolor="white", paper_bgcolor="white",
-                      legend=dict(orientation="h", y=-0.22, x=0) if legenda else None, showlegend=legenda)
-    fig.update_xaxes(showgrid=False, linecolor="#9aa5a8", ticks="outside")
-    fig.update_yaxes(gridcolor="#e6ecec", zeroline=False)
+@st.cache_resource
+def wilayah_grid(ver):
+    gr = D["grid"].sort_values("grid_id").reset_index(drop=True); nama = pd.Series([None] * len(gr), dtype=object); lab = []
+    if gj is None: return gr.assign(wilayah=nama), pd.DataFrame(columns=["nama", "lon", "lat"])
+    px, py = gr["lon"].to_numpy(float), gr["lat"].to_numpy(float)
+    for f in gj["features"]:
+        nm = f["properties"].get("nama", "?"); dalam = np.zeros(len(px), bool); besar = None
+        polys = [f["geometry"]["coordinates"]] if f["geometry"]["type"] == "Polygon" else list(f["geometry"]["coordinates"])
+        for poly in polys:
+            ext = np.asarray(poly[0], float); m = _dalam(px, py, ext)
+            for h in poly[1:]: m &= ~_dalam(px, py, np.asarray(h, float))
+            dalam |= m; luas = np.ptp(ext[:, 0]) * np.ptp(ext[:, 1])
+            if besar is None or luas > besar[0]: besar = (luas, ext[:, 0].mean(), ext[:, 1].mean())
+        nama[dalam & nama.isna().to_numpy()] = nm
+        if besar: lab.append((nm.replace("Kab. ", "").replace("Kota ", ""), besar[1], besar[2]))
+    return gr.assign(wilayah=nama.to_numpy()), pd.DataFrame(lab, columns=["nama", "lon", "lat"])
+
+
+def buat_peta(df, kol, zmin, zmax, satuan, warna, lab, zmid=None):
+    xs, ys = np.unique(df["lon"].round(4)), np.unique(df["lat"].round(4)); h = float(np.median(np.diff(xs)) / 2) if len(xs) > 1 else 0.025
+    kotak = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": str(int(g)), "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[lo - h, la - h], [lo + h, la - h], [lo + h, la + h], [lo - h, la + h], [lo - h, la - h]]]}} for g, lo, la in zip(df["grid_id"], df["lon"], df["lat"])]}
+    fig = go.Figure(go.Choroplethmap(geojson=kotak, locations=df["grid_id"].astype(int).astype(str), z=df[kol], text=df["wilayah"].fillna("Di luar batas kab/kota"), colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid,
+                                     marker=dict(opacity=0.88, line=dict(width=0)), colorbar=dict(title=dict(text=satuan, font=dict(size=10)), thickness=9, len=0.55, tickfont=dict(size=10), x=0.99),
+                                     hovertemplate="<b>%{text}</b><br>%{z:.1f} " + satuan + "<extra></extra>"))
+    zoom = float(np.clip(np.log2(500 / 256 * 360 / (max(xs.max() - xs.min(), 0.2) * 1.2)) - 0.1, 5, 11))
+    lay = dict(style="carto-positron", center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom)
+    if gj is not None: lay["layers"] = [dict(sourcetype="geojson", source=gj, type="line", color="#33474a", line=dict(width=1.3), below="")]
+    fig.update_layout(map=lay)
+    if len(lab): fig.add_trace(go.Scattermap(lon=lab["lon"], lat=lab["lat"], mode="text", text=lab["nama"], textfont=dict(size=11, color="#1d2b3a"), hoverinfo="skip", showlegend=False))
+    return fig
+
+
+def gambar(fig, h, legenda=False):
+    fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=11, color="#33404d"), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, legend=dict(orientation="h", y=1.14, x=0, font_size=10))
+    fig.update_xaxes(showgrid=False, linecolor="#c8cfd8"); fig.update_yaxes(gridcolor="#eef1f4", zeroline=False)
     cfg = dict(displaylogo=False, displayModeBar=False)
     try: st.plotly_chart(fig, width="stretch", config=cfg)
     except TypeError: st.plotly_chart(fig, use_container_width=True, config=cfg)
 
 
-def pilih(label, opsi, key, default=None, fmt=None):
+def pilih(opsi, key, default=None, fmt=None):
     default = default or opsi[0]
     if hasattr(st, "segmented_control"):
-        v = st.segmented_control(label, opsi, default=default, key=key, format_func=fmt or (lambda x: x), label_visibility="collapsed")
+        v = st.segmented_control(key, opsi, default=default, key=key, format_func=fmt or (lambda x: x), label_visibility="collapsed")
         return default if v is None else v
-    return st.radio(label, opsi, index=opsi.index(default), key=key, format_func=fmt or (lambda x: x), horizontal=True, label_visibility="collapsed")
+    return st.radio(key, opsi, index=opsi.index(default), key=key, format_func=fmt or (lambda x: x), horizontal=True, label_visibility="collapsed")
 
 
-# ------------------------------------------------------------------ peta
-def _dalam(px, py, ring):
-    x, y = ring[:, 0], ring[:, 1]
-    dalam = np.zeros(px.shape, bool)
-    for xi, yi, xj, yj in zip(x, y, np.roll(x, -1), np.roll(y, -1)):
-        if yi != yj: dalam ^= ((yi > py) != (yj > py)) & (px < (xj - xi) * (py - yi) / (yj - yi) + xi)
-    return dalam
+# ================================================================== HALAMAN CATATAN (untuk pemahaman sendiri)
+def halaman_catatan():
+    ho, tr = meta.get("holdout") or {}, meta.get("model_transfer_terbaik") or {}
+    st.markdown("## Catatan untuk pemahaman sendiri (bukan untuk ditampilkan)")
+    st.caption("Buka halaman ini dengan menambahkan ?catatan=1 di alamat dashboard. Tutup dengan menghapusnya.")
+    st.markdown("### 1. Cara membaca tiap panel")
+    st.table(pd.DataFrame([
+        ["Kartu angka", "Berapa dari 100 bulan yang kering: masa lalu menurut model, proyeksi 2026-2050, dan selisihnya.", "Bandingkan selisih, bukan angka mutlak. Garis di bawah angka = pengamatan nyata (CHIRPS)."],
+        ["Peta", "Frekuensi bulan kering per grid ±5 km, sesuai filter.", "Makin merah makin sering kering. Mode 'Selisih': merah = lebih sering kering dari masa lalu, biru = lebih jarang."],
+        ["Per 5 tahun", "Rata-rata proyeksi tiap blok lima tahun; garis oranye = masa lalu model.", "Sengaja per blok agar tidak terbaca sebagai ramalan tahun tertentu."],
+        ["Bulan rawan", "Profil per bulan; batang gelap = bulan yang sedang dipilih filter.", "Berlian oranye = masa lalu; batang lebih tinggi dari berlian = lebih sering kering."],
+        ["Tergantung model?", "Selisih proyeksi dibanding masa lalu untuk keempat model.", "Batang berbeda arah = hasil bergantung model, jadi tidak ada perubahan yang pasti."],
+        ["Per kab/kota", "Rata-rata grid di dalam tiap kab/kota.", "Hanya agregasi; polanya sebagian besar berasal dari klimatologi CHIRPS, bukan sinyal GCM."]],
+        columns=["Panel", "Apa itu", "Cara membaca"]).set_index("Panel"))
+    st.markdown("### 2. Aturan warna dan kata (semua dihitung otomatis)")
+    st.table(pd.DataFrame([
+        ["Selisih", "BELUM PASTI (abu) bila |selisih| < 2 × galat baku naik-turun antar-tahun; LEBIH SERING (merah) / LEBIH JARANG (biru) bila lebih besar."],
+        ["Searah antar model", "SEPAKAT (hijau) bila 4 dari 4 model searah; CONDONG (kuning) bila 3 dari 4; TERPECAH (merah) bila 2 dari 4 atau kurang."],
+        ["Keyakinan", "Enam titik (hijau = terpenuhi): model terbaik dari 4; lebih baik dari klimatologi di uji 2021-2025; arah sejalan GCM mentah; data masukan di luar rentang < 10%; baseline model dekat pengamatan (≤ 3 poin); keempat model searah. Terpenuhi ≥ 5 = TINGGI, 4 = SEDANG, ≤ 3 = RENDAH."],
+        ["Satuan", "'dari 100 bulan' = persen bulan kering (SPI ≤ -1); selisih dalam poin persentase."]], columns=["Elemen", "Aturan"]).set_index("Elemen"))
+    st.markdown("### 3. Ringkasan metode (5W1H)")
+    st.markdown(f"- **Apa:** seberapa sering bulan kering (SPI ≤ -1) di Banten pada {H0}-{H1} dibanding 1981-2010.\n- **Mengapa:** kekeringan memengaruhi pertanian, air bersih, dan waduk; ini gambaran kecenderungan, bukan prakiraan.\n"
+                f"- **Siapa:** {PEMBUAT or '-'}.\n- **Di mana:** Banten, grid ±5 km dan kab/kota.\n- **Kapan:** proyeksi {H0}-{H1}; baseline 1981-2010; data dijalankan {meta.get('tanggal_run', '-')} (notebook {meta.get('versi_notebook', '-')}).\n"
+                f"- **Bagaimana:** GCM {meta.get('gcm')} ({meta.get('skenario')}) → model statistik dilatih pada ERA5 dan CHIRPS (latih/seleksi 1981-2020, hold-out 2021-2025) → ensemble hujan bulanan → SPI.")
+    st.markdown("### 4. Angka penting untuk dijelaskan")
+    st.markdown(f"- Model tampil: **{meta.get('model')}**. Status: {meta.get('status_gerbang')}.")
+    if ho: st.markdown(f"- Hold-out 2021-2025: CRPSS Tingkat 1 = **{n(ho['crpss_t1'], 3, True)}**, positif di **{ho['tahun_positif']} dari {ho['n_tahun']}** tahun. Hanya 5 tahun, jadi baca sebagai pemeriksaan arah.")
+    if tr: st.markdown(f"- Transfer ke prediktor GCM (Tingkat 2, SPI-3): selisih frekuensi kering vs pengamatan per model = {tr.get('selisih_semua')}. Paling dekat pengamatan: **{tr.get('model')}** (sensitivitas, bukan pengganti).")
+    if D["gerb"] is not None: st.dataframe(D["gerb"].round(3), hide_index=True)
+    st.markdown("### 5. Hal yang harus diingat saat menjelaskan")
+    st.markdown("- Ini **bukan ramalan**: GCM berjalan bebas, jadi tahun kering di grafik tidak sama dengan tahun kering sebenarnya.\n- Satu GCM, satu skenario, satu anggota; ketidakpastian model/skenario tidak tercakup.\n"
+                "- Skill sefase (Tingkat 1) **tidak otomatis terbawa** ke prediktor GCM (Tingkat 2): model melebihkan frekuensi bulan kering, jadi yang dibaca adalah **selisih**.\n- Hold-out hanya 5 tahun; selisih kecil belum berarti.")
+    st.markdown("### 6. Penjelasan 30 detik")
+    st.info("Kami memproyeksikan seberapa sering bulan kering terjadi di Banten sampai 2050 memakai satu model iklim global yang diperhalus ke skala Banten. "
+            "Hasilnya dibandingkan dengan masa lalu menurut model yang sama. Selisihnya kecil dan masih dalam naik-turun alami, serta keempat model statistik tidak sepakat arahnya, "
+            "jadi belum ada perubahan yang bisa dipastikan. Ini gambaran kecenderungan, bukan ramalan.")
 
 
-def _poligon(geom):
-    return [geom["coordinates"]] if geom["type"] == "Polygon" else list(geom["coordinates"]) if geom["type"] == "MultiPolygon" else []
+if str(st.query_params.get("catatan", "")) in ("1", "true", "ya"): halaman_catatan(); st.stop()
 
+# ================================================================== DASHBOARD SATU LAYAR
+gr_ref, LAB = wilayah_grid(len(D["grid"]))
+th_all = sorted(D["b_grid"]["tahun"].unique().tolist())
 
-@st.cache_data
-def petakan_wilayah(grid_ref, ada_gj):
-    """Nama kabupaten/kota untuk tiap grid (titik pusat grid di dalam poligon) dan posisi label peta."""
-    nama = pd.Series([None] * len(grid_ref), dtype=object)
-    label = []
-    if not ada_gj: return nama, pd.DataFrame(columns=["nama", "lon", "lat"])
-    px, py = grid_ref["lon"].to_numpy(float), grid_ref["lat"].to_numpy(float)
-    for f in gj["features"]:
-        nm = f["properties"].get("nama", str(f.get("id", "?")))
-        dalam, besar = np.zeros(len(px), bool), None
-        for poly in _poligon(f["geometry"]):
-            ext = np.asarray(poly[0], float)
-            m = _dalam(px, py, ext)
-            for hole in poly[1:]: m &= ~_dalam(px, py, np.asarray(hole, float))
-            dalam |= m
-            luas = np.ptp(ext[:, 0]) * np.ptp(ext[:, 1])
-            if besar is None or luas > besar[0]: besar = (luas, ext[:, 0].mean(), ext[:, 1].mean())
-        nama[dalam & nama.isna().to_numpy()] = nm
-        if besar: label.append((nm.replace("Kab. ", "").replace("Kota ", ""), besar[1], besar[2]))
-    return nama, pd.DataFrame(label, columns=["nama", "lon", "lat"])
+c_t, c_s, c_m, c_y, c_p = st.columns([2.6, 1.5, 1.25, 1.8, 1.7], gap="small")
+c_t.markdown(f'<div class="ttl">Bulan kering di Banten, {H0}-{H1}</div><div class="sub">Proyeksi satu model iklim (bukan ramalan) vs masa lalu 1981-2010 · bulan kering = hujan jauh di bawah normal (SPI ≤ -1)</div>', unsafe_allow_html=True)
+with c_s: st.markdown('<div class="flabel">Jangka kekeringan</div>', unsafe_allow_html=True); skala = pilih(list(meta["spi_skala"]), "skala", fmt=lambda s: NAMA_SKALA.get(s, s))
+with c_m: st.markdown('<div class="flabel">Bulan / musim</div>', unsafe_allow_html=True); musim = st.selectbox("musim", list(PRESET), label_visibility="collapsed")
+with c_y: st.markdown('<div class="flabel">Rentang tahun</div>', unsafe_allow_html=True); t0, t1 = st.select_slider("tahun", th_all, value=(th_all[0], th_all[-1]), label_visibility="collapsed")
+with c_p: st.markdown('<div class="flabel">Peta menampilkan</div>', unsafe_allow_html=True); mode = pilih(["Kering", "Selisih"], "mode_peta")
+bulan = PRESET[musim]
 
+# ---- agregasi
+G = D["b_grid"][(D["b_grid"]["SPI"] == skala)]; B = D["b_base"][(D["b_base"]["SPI"] == skala)]
+gs = G[G["bulan"].isin(bulan) & G["tahun"].between(t0, t1)]; bs = B[B["bulan"].isin(bulan)]
+if gs.empty: st.warning("Tidak ada data untuk pilihan ini."); st.stop()
+per_th = gs.groupby("tahun")["p_kering"].mean().mul(100)
+proy, base, ref = float(gs["p_kering"].mean() * 100), float(bs["kering_model_pct"].mean()), float(bs["kering_target_pct"].mean())
+sel = proy - base; kode = tafsir(sel, se_kasar(per_th))
+# model
+selisih_model = {}
+if D["banding"] is not None:
+    dm = D["banding"][(D["banding"]["SPI"] == skala) & D["banding"]["model"].isin(ML)]
+    for nm_, g_ in dm.groupby("model"):
+        if g_["baseline_model_sendiri_pct"].notna().any() and g_["n_bulan_valid"].sum() > 0: selisih_model[nm_] = float(np.average(g_["kering_pct_mean"], weights=g_["n_bulan_valid"]) - g_["baseline_model_sendiri_pct"].dropna().iloc[0])
+utama = next((m_ for m_ in ML if m_ in str(meta.get("model", ""))), None); tr = (meta.get("model_transfer_terbaik") or {}).get("model")
+if tr is None and D["gerb"] is not None and {"c_kering_pct", "acuan_c"} <= set(D["gerb"].columns): gg = D["gerb"].set_index("model"); tr = (gg["c_kering_pct"] - gg["acuan_c"]).abs().idxmin()
+tanda = np.sign(list(selisih_model.values())); n_searah = int(max((tanda > 0).sum(), (tanda < 0).sum())) if len(tanda) else 0
+# keyakinan
+ho = meta.get("holdout") or {}; ka = (meta.get("konsistensi_arah") or {}).get("jendela") or []; jd = next((j for j in ka if j["jendela"] == f"{H0}-{H1}"), None); luar = (meta.get("baris_prediktor_luar_rentang_pct") or {}).get(f"{H0}-{H1}")
+cek = [("Model terbaik dari 4 model (tuning setara)", "terbaik dari 4" in str(meta.get("status_gerbang", ""))),
+       ("Lebih baik dari klimatologi pada uji 2021-2025", bool(ho.get("lebih_baik_dari_klimatologi"))),
+       ("Arah sejalan dengan hujan mentah GCM", jd is not None and not jd["berlawanan"]),
+       ("Data masukan di luar rentang < 10%", luar is not None and luar < 10),
+       ("Baseline model dekat pengamatan (≤ 3 poin)", abs(base - ref) <= 3),
+       ("Keempat model searah", len(tanda) >= 2 and n_searah == len(tanda))]
+n_ok = sum(ok for _, ok in cek); yak, yak_c = ("TINGGI", "green") if n_ok >= 5 else ("SEDANG", "amber") if n_ok == 4 else ("RENDAH", "red")
 
-def buat_peta(df, kol, zmin, zmax, satuan, warna, zmid=None):
-    xs, ys = np.unique(df["lon"].round(4)), np.unique(df["lat"].round(4))
-    h = float(np.median(np.diff(xs)) / 2) if len(xs) > 1 else 0.025
-    kotak = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": str(int(g)), "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[lo - h, la - h], [lo + h, la - h], [lo + h, la + h], [lo - h, la + h], [lo - h, la - h]]]}}
-                                                      for g, lo, la in zip(df["grid_id"], df["lon"], df["lat"])]}
-    teks = df["wilayah"].fillna("Di luar batas kab/kota").to_numpy()
-    fig = go.Figure(go.Choroplethmap(geojson=kotak, locations=df["grid_id"].astype(int).astype(str), z=df[kol], text=teks, colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid,
-                                     marker=dict(opacity=0.85, line=dict(width=0)), colorbar=dict(title=satuan, thickness=12, len=0.7),
-                                     hovertemplate="<b>%{text}</b><br>%{z:.1f} " + satuan + "<extra></extra>"))
-    zoom = float(np.clip(np.log2(500 / 256 * 360 / (max(xs.max() - xs.min(), 0.2) * 1.2)) - 0.1, 5, 11))
-    lay = dict(style="carto-positron", center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom)
-    if gj is not None: lay["layers"] = [dict(sourcetype="geojson", source=gj, type="line", color="#33474a", line=dict(width=1.5), below="")]
-    fig.update_layout(map=lay)
-    if len(WIL_LABEL): fig.add_trace(go.Scattermap(lon=WIL_LABEL["lon"], lat=WIL_LABEL["lat"], mode="text", text=WIL_LABEL["nama"], textfont=dict(size=12, color="#1f2d2e"), hoverinfo="skip", showlegend=False))
-    return fig
+# ---- kartu angka
+def tile(k, v, kecil, s, chip, cls, warna):
+    return f'<div class="tile" style="--c:{warna}"><div class="k">{k}</div><div class="v">{v} <small>{kecil}</small></div><div class="s">{s}</div><span class="chip {cls}">{chip}</span></div>'
+ch_sel = {"sama": ("BELUM PASTI", "gray"), "lebih": ("LEBIH SERING KERING", "red"), "kurang": ("LEBIH JARANG KERING", "blue"), "sedikit": ("DATA SEDIKIT", "gray")}[kode]
+ch_mod = ("SEPAKAT", "green") if len(tanda) and n_searah == len(tanda) else ("CONDONG", "amber") if len(tanda) and n_searah == len(tanda) - 1 else ("TERPECAH", "red") if len(tanda) else ("-", "gray")
+k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+k1.markdown(tile("Masa lalu 1981-2010 (model)", n(base, 0), "dari 100 bulan", f"pengamatan nyata: {n(ref, 0)}", "MODEL MELEBIHKAN" if base - ref > 3 else "DEKAT PENGAMATAN", "amber" if base - ref > 3 else "green", "#e8833a"), unsafe_allow_html=True)
+k2.markdown(tile(f"Proyeksi {t0}-{t1}", n(proy, 0), "dari 100 bulan", f"{musim.lower()} · {NAMA_SKALA.get(skala, skala)}", "RATA-RATA ENSEMBLE", "gray", PROY), unsafe_allow_html=True)
+k3.markdown(tile("Selisih vs masa lalu", n(sel, 1, True), "bulan per 100", "model yang sama", *ch_sel, WARNA_CHIP[ch_sel[1]]), unsafe_allow_html=True)
+k4.markdown(tile("Searah antar model", f"{n_searah}/{len(tanda)}" if len(tanda) else "-", "model", f"rentang {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}" if selisih_model else "data model tidak ada", *ch_mod, WARNA_CHIP[ch_mod[1]]), unsafe_allow_html=True)
+titik = "".join(f'<span class="dot {"ok" if ok else "no"}" title="{"✓" if ok else "✗"} {t}"></span>' for t, ok in cek)
+k5.markdown(f'<div class="tile" style="--c:{WARNA_CHIP[yak_c]}"><div class="k">Keyakinan</div><div class="v">{yak}</div><div class="s">{n_ok} dari 6 syarat terpenuhi (arahkan kursor ke titik)</div>{titik}</div>', unsafe_allow_html=True)
 
+# ---- peta & agregasi grid
+agg = gs.groupby("grid_id")["p_kering"].mean().mul(100).rename("p_kering").reset_index().merge(bs.groupby("grid_id")["kering_model_pct"].mean().reset_index(), on="grid_id").merge(gr_ref, on="grid_id")
+agg["selisih"] = agg["p_kering"] - agg["kering_model_pct"]; agg_in = agg[agg["wilayah"].notna()] if gj is not None else agg
+rk = agg_in.dropna(subset=["wilayah"]).groupby("wilayah")[["p_kering", "kering_model_pct"]].mean().sort_values("p_kering") if gj is not None else pd.DataFrame()
+prof = G[G["tahun"].between(t0, t1)].groupby("bulan")["p_kering"].mean().mul(100); pb = B.groupby("bulan")["kering_model_pct"].mean().reindex(prof.index)
 
-# ------------------------------------------------------------------ kepala halaman
-st.title("Seberapa sering Banten mengalami bulan kering?")
-st.markdown(f"Proyeksi **{H0}-{H1}** dibanding masa lalu (1981-2010) · satu model iklim, satu skenario · **bukan ramalan cuaca**.")
+# ---- baris insight (kata singkat + warna)
+ins = [({"sama": "gray", "lebih": "red", "kurang": "blue", "sedikit": "gray"}[kode], {"sama": f"Selisih {n(sel, 1, True)}: masih naik-turun alami", "lebih": f"Lebih sering kering ({n(sel, 1, True)})", "kurang": f"Lebih jarang kering ({n(sel, 1, True)})", "sedikit": "Data terlalu sedikit"}[kode]),
+       ("amber" if base - ref > 3 else "green", f"Model melebihkan: {n(base, 0)} vs {n(ref, 0)} nyata" if base - ref > 3 else "Model dekat pengamatan")]
+if selisih_model: ins.append((ch_mod[1], "Keempat model searah" if ch_mod[0] == "SEPAKAT" else f"Model terpecah: {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}"))
+ins.append(("gray", f"Paling rawan: {BULAN[int(prof.idxmax()) - 1]}" + (f" · {rk.index[-1]}" if len(rk) else "")))
+st.markdown("".join(f'<span class="ins"><i style="background:{WARNA_CHIP[c]}"></i>{t}</span>' for c, t in ins), unsafe_allow_html=True)
 
-st.markdown("**Pilih jangka kekeringan:**")
-skala = pilih("Skala", list(meta["spi_skala"]), "skala", fmt=lambda s: NAMA_SKALA.get(s, s))
-st.caption(PENJELASAN_SKALA.get(skala, "") + "  Bulan dianggap **kering** bila hujannya jauh di bawah normal (SPI ≤ -1).")
+# ---- grid panel
+col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
+with col_peta, st.container(border=True):
+    st.markdown(f'<div class="ph">Peta · {"seberapa sering kering" if mode == "Kering" else "selisih vs masa lalu"} (per 100 bulan)</div>', unsafe_allow_html=True)
+    if mode == "Kering": fig = buat_peta(agg_in, "p_kering", 0, max(20.0, float(np.ceil(np.nanpercentile(agg_in["p_kering"], 98) / 10) * 10)), "dari 100", KERING, LAB)
+    else: lim = max(5.0, float(np.ceil(np.nanpercentile(agg_in["selisih"].abs(), 98) / 5) * 5)); fig = buat_peta(agg_in, "selisih", -lim, lim, "selisih", "RdBu_r", LAB, zmid=0)
+    gambar(fig, H_PETA)
+with col_b:
+    with st.container(border=True):
+        st.markdown('<div class="ph">Per 5 tahun · proyeksi vs masa lalu</div>', unsafe_allow_html=True)
+        blok = per_th.groupby((per_th.index - t0) // 5).agg(["mean", lambda s: s.index.min(), lambda s: s.index.max()]); blok.columns = ["v", "a", "b"]
+        fig = go.Figure(go.Bar(x=[f"{int(a)}-{str(int(b))[2:]}" for a, b in zip(blok["a"], blok["b"])], y=blok["v"], marker_color=PROY, text=[n(v, 0) for v in blok["v"]], textposition="outside", cliponaxis=False, hovertemplate="%{x}<br>%{y:.1f} dari 100<extra></extra>"))
+        fig.add_hline(y=base, line_dash="dot", line_color=BASE, line_width=2.5, annotation_text=f"masa lalu {n(base, 0)}", annotation_font_size=10, annotation_position="top left")
+        fig.update_layout(yaxis_range=[0, max(blok["v"].max(), base) * 1.35]); gambar(fig, H_KECIL)
+    with st.container(border=True):
+        st.markdown('<div class="ph">Tergantung model? · selisih vs masa lalu menurut tiap model</div>', unsafe_allow_html=True)
+        if len(selisih_model) >= 2:
+            urut = sorted(selisih_model, key=selisih_model.get); nama_ = [m_ + (" ★" if m_ == utama else " ◆" if m_ == tr and m_ != utama else "") for m_ in urut]
+            fig = go.Figure(go.Bar(y=nama_, x=[selisih_model[m_] for m_ in urut], orientation="h", marker_color=[PROY if m_ == utama else BASE if m_ == tr else ABU for m_ in urut], text=[n(selisih_model[m_], 1, True) for m_ in urut], textposition="outside", cliponaxis=False))
+            fig.add_vline(x=0, line_color="#555", line_width=1.2); fig.update_layout(xaxis_title="★ dipakai · ◆ paling dekat pengamatan · kanan = lebih sering kering", xaxis_title_font_size=9); gambar(fig, H_KECIL)
+        else: st.caption("Data perbandingan model belum ada.")
+with col_c:
+    with st.container(border=True):
+        st.markdown('<div class="ph">Bulan rawan · terang = bulan terpilih</div>', unsafe_allow_html=True)
+        fig = go.Figure(go.Bar(x=[BULAN[b - 1] for b in prof.index], y=prof.values, marker_color=[PROY if b in bulan else "#b8cfdd" for b in prof.index], hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>proyeksi</extra>"))
+        fig.add_trace(go.Scatter(x=[BULAN[b - 1] for b in pb.index], y=pb.values, mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>masa lalu</extra>")); gambar(fig, H_KECIL)
+    with st.container(border=True):
+        st.markdown('<div class="ph">Per kabupaten/kota · ◆ = masa lalu</div>', unsafe_allow_html=True)
+        if len(rk):
+            fig = go.Figure(go.Bar(y=rk.index, x=rk["p_kering"], orientation="h", marker_color=PROY, text=[n(v, 0) for v in rk["p_kering"]], textposition="outside", cliponaxis=False, hovertemplate="%{y}<br>%{x:.1f} dari 100<extra></extra>"))
+            fig.add_trace(go.Scatter(y=rk.index, x=rk["kering_model_pct"], mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{y}<br>masa lalu %{x:.1f}<extra></extra>")); gambar(fig, H_KECIL)
+        else: st.caption("Batas kab/kota belum tersedia.")
 
-r = reg[reg["SPI"] == skala].sort_values("tahun")
-rata, base = float(meta["proyeksi_pct"][skala]), float(meta["baseline_model_sendiri_pct"][skala])
-sel, se = rata - base, se_kasar(r["kering_pct_mean"])
-kode = tafsir(sel, se)
-
-tab_ring, tab_peta, tab_tentang, tab_ilmiah = st.tabs(["Ringkasan", "Peta", "Batasan & istilah", "Untuk peneliti"])
-
-# ------------------------------------------------------------------ tab ringkasan
-with tab_ring:
-    st.markdown(f'<div class="hero">Pada {H0}-{H1}, sekitar <b>{n(rata, 0)} dari 100 bulan</b> di Banten diproyeksikan kering. '
-                f'Pada 1981-2010, model yang sama menghasilkan <b>{n(base, 0)} dari 100 bulan</b>. {KALIMAT[kode]}</div>', unsafe_allow_html=True)
-    st.write("")
-    c1, c2, c3 = st.columns(3)
-    with c1.container(border=True): st.metric("Masa lalu (1981-2010)", f"{n(base)} dari 100 bulan", help="Frekuensi bulan kering menurut model yang sama, supaya bias model saling meniadakan.")
-    with c2.container(border=True): st.metric(f"Proyeksi {H0}-{H1}", f"{n(rata)} dari 100 bulan")
-    with c3.container(border=True): st.metric("Selisih", f"{n(sel, 1, True)} bulan per 100", delta="belum berarti" if kode == "sama" else ("lebih sering kering" if kode == "lebih" else "lebih jarang kering"), delta_color="off",
-                                              help="Dianggap berarti bila lebih dari 2x galat baku kasar naik-turun antar-tahun.")
-
-    ref = float((meta.get("acuan_target_pct") or {}).get(skala, np.nan))
-    if np.isfinite(ref):
-        st.caption(f"Pengamatan nyata ({meta.get('target', 'CHIRPS')}, 1981-2010): sekitar **{n(ref, 0)} dari 100 bulan** kering." +
-                   (" Model melebihkan frekuensi bulan kering, jadi bandingkan **selisihnya**, bukan angka mutlaknya." if base - ref > 2 else ""))
-
-    st.subheader("Rata-rata per lima tahun")
-    st.caption("Per lima tahun supaya tidak terbaca sebagai ramalan tahun tertentu. Garis putus-putus = masa lalu 1981-2010.")
-    r = r.assign(blok=(r["tahun"] - H0) // 5)
-    blok = r.groupby("blok").apply(lambda g: pd.Series({"a": g["tahun"].min(), "b": g["tahun"].max(), "v": np.average(g["kering_pct_mean"], weights=g["n_bulan_valid"])}), include_groups=False)
-    fig = go.Figure(go.Bar(x=[f"{int(a)}-{int(b)}" for a, b in zip(blok["a"], blok["b"])], y=blok["v"], marker_color=TEAL, text=[n(v, 0) for v in blok["v"]], textposition="outside", cliponaxis=False,
-                           hovertemplate="%{x}<br><b>%{y:.1f} dari 100 bulan kering</b><extra></extra>"))
-    fig.add_hline(y=base, line_dash="dot", line_color=ABU_TUA, line_width=2.5, annotation_text=f"1981-2010: {n(base, 0)}", annotation_position="top left")
-    fig.update_layout(yaxis_title="bulan kering dari 100 bulan", yaxis_range=[0, max(blok["v"].max(), base) * 1.3])
-    tampil(fig, 320, legenda=False)
-
-    with st.expander("Lihat per tahun (hati-hati: satu tahun bukan ramalan)"):
-        st.caption("Model iklim berjalan bebas, jadi tahun kering di grafik ini tidak sama dengan tahun kering sebenarnya. Tahun 2026 hanya memuat sebagian bulan.")
-        fig = go.Figure(go.Bar(x=r["tahun"], y=r["kering_pct_mean"], marker_color=ABU, hovertemplate="%{x}<br>%{y:.1f} dari 100 bulan<extra></extra>"))
-        fig.add_hline(y=base, line_dash="dot", line_color=ABU_TUA, line_width=2.5)
-        fig.update_layout(yaxis_title="bulan kering dari 100 bulan"); tampil(fig, 280, legenda=False)
-
-    st.subheader("Bulan apa yang paling rawan?")
-    if D["b_grid"] is not None:
-        gm = D["b_grid"][D["b_grid"]["SPI"] == skala]; bb = D["b_base"][D["b_base"]["SPI"] == skala]
-        prof = gm.groupby("bulan")["p_kering"].mean() * 100
-        pb = bb.groupby("bulan")["kering_model_pct"].mean().reindex(prof.index)
-        fig = go.Figure(go.Bar(x=[BULAN[b - 1] for b in prof.index], y=prof.values, marker_color=TEAL, name=f"Proyeksi {H0}-{H1}", hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>proyeksi</extra>"))
-        fig.add_trace(go.Scatter(x=[BULAN[b - 1] for b in pb.index], y=pb.values, mode="markers", marker=dict(symbol="diamond", size=11, color=ORANYE, line=dict(width=1.2, color="white")), name="Masa lalu 1981-2010",
-                                 hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>1981-2010</extra>"))
-        fig.update_layout(yaxis_title="bulan kering dari 100 bulan"); tampil(fig, 320)
-        st.caption(f"Paling sering kering: **{BULAN[int(prof.idxmax()) - 1]}** ({n(prof.max(), 0)} dari 100). Paling jarang: **{BULAN[int(prof.idxmin()) - 1]}** ({n(prof.min(), 0)} dari 100).")
-
-    ML = ["GLM Gamma", "Random Forest", "XGBoost", "Neural Net"]
-    selisih_model = {}
-    if D["banding"] is not None:
-        dm = D["banding"][(D["banding"]["SPI"] == skala) & D["banding"]["model"].isin(ML)]
-        for nm_, g_ in dm.groupby("model"):
-            if g_["baseline_model_sendiri_pct"].notna().any() and g_["n_bulan_valid"].sum() > 0:
-                selisih_model[nm_] = float(np.average(g_["kering_pct_mean"], weights=g_["n_bulan_valid"]) - g_["baseline_model_sendiri_pct"].dropna().iloc[0])
-    if len(selisih_model) >= 2:
-        utama = next((m_ for m_ in ML if m_ in str(meta.get("model", ""))), None)
-        tr = (meta.get("model_transfer_terbaik") or {}).get("model")
-        if tr is None and D["gerb"] is not None and {"c_kering_pct", "acuan_c"} <= set(D["gerb"].columns):
-            gg = D["gerb"].set_index("model"); tr = (gg["c_kering_pct"] - gg["acuan_c"]).abs().idxmin()
-        st.subheader("Apakah hasilnya tergantung pada model?")
-        st.caption("Tiap batang = selisih frekuensi bulan kering dibanding masa lalu, menurut modelnya masing-masing. Batang yang berbeda arah berarti hasilnya bergantung pada model.")
-        urut = sorted(selisih_model, key=selisih_model.get)
-        nama_ = [m_ + (" (dipakai)" if m_ == utama else " (paling dekat pengamatan)" if m_ == tr and m_ != utama else "") for m_ in urut]
-        fig = go.Figure(go.Bar(y=nama_, x=[selisih_model[m_] for m_ in urut], orientation="h", marker_color=[TEAL if m_ == utama else ORANYE if m_ == tr else ABU for m_ in urut],
-                               text=[n(selisih_model[m_], 1, True) for m_ in urut], textposition="outside", cliponaxis=False, hovertemplate="%{y}<br>%{x:+.1f} bulan per 100<extra></extra>"))
-        fig.add_vline(x=0, line_color="#555", line_width=1.2); fig.update_layout(xaxis_title="selisih bulan kering per 100 bulan (kanan = lebih sering kering)"); tampil(fig, 260, legenda=False)
-        arah = np.sign([v for v in selisih_model.values()])
-        st.caption("**Keempat model searah.**" if len(set(arah)) == 1 else "**Keempat model tidak sepakat arahnya**, jadi tidak ada perubahan yang bisa dipastikan. Model yang berwarna oranye hanya pembanding, bukan pengganti model utama." if tr != utama else "**Model tidak sepakat arahnya**, jadi tidak ada perubahan yang bisa dipastikan.")
-
-    st.subheader("Seberapa bisa dipercaya?")
-    ka = (meta.get("konsistensi_arah") or {}).get("jendela") or []
-    jd = next((j for j in ka if j["jendela"] == f"{H0}-{H1}"), None)
-    luar = (meta.get("baris_prediktor_luar_rentang_pct") or {}).get(f"{H0}-{H1}")
-    ho = meta.get("holdout") or {}
-    cek = [("terbaik dari 4" in str(meta.get("status_gerbang", "")), "Model dipilih sebagai yang terbaik di antara empat model yang dituning dengan cara yang sama.", "Pemilihan model belum memakai perbandingan empat model yang adil."),
-           (bool(ho.get("lebih_baik_dari_klimatologi")) if ho else False, "Pada data uji 2021-2025 yang dikunci, model lebih baik daripada klimatologi biasa.",
-            "Pada data uji 2021-2025 yang dikunci, model belum lebih baik daripada klimatologi biasa." if ho else "Data uji 2021-2025 belum tersedia di berkas hasil."),
-           (jd is not None and not jd["berlawanan"], "Arah perubahan sejalan dengan hujan mentah model iklim.", "Arah perubahan hujan model <b>berlawanan</b> dengan hujan mentah model iklim; baca sebagai 'belum ada perubahan jelas'."),
-           (luar is not None and luar < 10, f"Hanya {n(luar or 0, 0)}% data masukan di luar rentang yang pernah dipelajari model.", f"{n(luar or 0, 0)}% data masukan di luar rentang yang pernah dipelajari model."),
-           (np.isfinite(ref) and abs(base - ref) <= 3, "Frekuensi bulan kering di masa lalu menurut model dekat dengan pengamatan.", f"Frekuensi bulan kering di masa lalu menurut model {n(base, 0)} dari 100, sedangkan pengamatan {n(ref, 0) if np.isfinite(ref) else '-'}."),
-           (len(selisih_model) >= 2 and len(set(np.sign(list(selisih_model.values())))) == 1, "Keempat model memberi arah perubahan yang sama.", "Keempat model tidak sepakat arah perubahannya.")]
-    for ok, ya, tidak in cek: st.markdown(f"{'✅' if ok else '⚠️'} {ya if ok else tidak}", unsafe_allow_html=True)
-    st.caption("Karena itu, pakai dashboard ini sebagai gambaran kemungkinan, bukan angka pasti. Setelah 2050 data masukan makin jauh dari yang dipelajari model, sehingga proyeksi dihentikan di 2050.")
-
-# ------------------------------------------------------------------ tab peta
-with tab_peta:
-    if D["b_grid"] is None or D["grid"] is None:
-        st.info("Berkas ekspor bulanan (sel 14e) belum ada, jadi peta belum bisa ditampilkan.")
-    else:
-        grid_ref = D["grid"].sort_values("grid_id").reset_index(drop=True)
-        wil, WIL_LABEL = petakan_wilayah(grid_ref[["grid_id", "lon", "lat"]], gj is not None)
-        grid_ref = grid_ref.assign(wilayah=wil.to_numpy())
-        grdm = D["b_grid"][D["b_grid"]["SPI"] == skala]; basem = D["b_base"][D["b_base"]["SPI"] == skala]
-        tahun_all = sorted(grdm["tahun"].unique().tolist())
-
-        k1, k2, k3 = st.columns([1.2, 1, 1.2])
-        t0, t1 = k1.select_slider("Rentang tahun", tahun_all, value=(tahun_all[0], tahun_all[-1]))
-        musim = k2.selectbox("Bulan atau musim", list(PRESET) + ["Pilih bulan sendiri"], help="Pembagian musim di Banten hanya perkiraan kasar.")
-        bulan = PRESET[musim] if musim in PRESET else [BULAN.index(m) + 1 for m in st.multiselect("Pilih bulan", BULAN, default=BULAN[5:9])]
-        mode = k3.radio("Tampilan", ["Seberapa sering kering", "Dibanding masa lalu"], horizontal=True)
-        dalam_saja = st.checkbox("Sembunyikan grid di luar batas Banten (laut atau provinsi tetangga)", value=True, disabled=gj is None)
-
-        tp = [t for t in tahun_all if t0 <= t <= t1]
-        gs = grdm[grdm["tahun"].isin(tp) & grdm["bulan"].isin(bulan)]
-        if gs.empty or not bulan:
-            st.warning("Tidak ada data untuk pilihan ini. Pilih minimal satu bulan dan satu tahun.")
-        else:
-            agg = gs.groupby("grid_id")["p_kering"].mean().mul(100).rename("p_kering").reset_index()
-            bs = basem[basem["bulan"].isin(bulan)].groupby("grid_id")["kering_model_pct"].mean().reset_index()
-            agg = agg.merge(bs, on="grid_id").merge(grid_ref, on="grid_id"); agg["selisih"] = agg["p_kering"] - agg["kering_model_pct"]
-            if dalam_saja and gj is not None: agg = agg[agg["wilayah"].notna()]
-            fk, fb = agg["p_kering"].mean(), agg["kering_model_pct"].mean()
-            st.markdown(f"**{musim if musim != 'Pilih bulan sendiri' else ', '.join(BULAN[b - 1] for b in bulan)} · {t0}-{t1}:** sekitar **{n(fk, 0)} dari 100 bulan** kering "
-                        f"(masa lalu: {n(fb, 0)}; selisih {n(fk - fb, 1, True)}).")
-            ca, cb = st.columns([3, 2], gap="medium")
-            with ca:
-                if mode == "Seberapa sering kering":
-                    hi = max(20.0, float(np.ceil(np.nanpercentile(agg["p_kering"], 98) / 10) * 10)); fig = buat_peta(agg, "p_kering", 0, hi, "dari 100 bulan", SKALA_WARNA_KERING)
-                else:
-                    lim = max(5.0, float(np.ceil(np.nanpercentile(agg["selisih"].abs(), 98) / 5) * 5)); fig = buat_peta(agg, "selisih", -lim, lim, "selisih", "RdBu_r", zmid=0)
-                tampil(fig, 480, legenda=False)
-                st.caption("Makin oranye/merah = makin sering kering." if mode.startswith("Seberapa") else "Merah = lebih sering kering dari masa lalu, biru = lebih jarang.")
-            with cb:
-                if gj is not None and agg["wilayah"].notna().any():
-                    rk = agg.dropna(subset=["wilayah"]).groupby("wilayah")[["p_kering", "kering_model_pct"]].mean().sort_values("p_kering")
-                    fig = go.Figure(go.Bar(y=rk.index, x=rk["p_kering"], orientation="h", marker_color=TEAL, name="Proyeksi", hovertemplate="%{y}<br>%{x:.1f} dari 100<extra></extra>"))
-                    fig.add_trace(go.Scatter(y=rk.index, x=rk["kering_model_pct"], mode="markers", marker=dict(symbol="diamond", size=12, color=ORANYE, line=dict(width=1.2, color="white")), name="Masa lalu"))
-                    fig.update_layout(xaxis_title="bulan kering dari 100 bulan"); tampil(fig, 480)
-                    st.caption(f"Paling sering kering: **{rk.index[-1]}** ({n(rk['p_kering'].iloc[-1], 0)}). Paling jarang: **{rk.index[0]}** ({n(rk['p_kering'].iloc[0], 0)}).")
-            st.download_button("Unduh tabel per grid (CSV)", agg.drop(columns=["selisih"]).round(3).to_csv(index=False).encode("utf-8-sig"), file_name=f"peta_kering_banten_{skala}.csv", mime="text/csv")
-
-# ------------------------------------------------------------------ tab tentang
-with tab_tentang:
-    st.subheader("Batasan yang perlu diingat")
-    st.markdown("- **Bukan ramalan.** Model iklim berjalan bebas, jadi tahun kering di grafik tidak sama dengan tahun kering yang akan terjadi.\n"
-                "- **Satu model iklim dan satu skenario.** Hasil model atau skenario lain bisa berbeda; rentang yang ditampilkan tidak mencakup ketidakpastian itu.\n"
-                "- **Baca selisih, bukan angka mutlak.** Setiap model punya bias sendiri, maka pembanding utama adalah masa lalu menurut model yang sama.\n"
-                "- **Perubahan kecil belum berarti.** Selisih yang masih dalam naik-turun alami antar-tahun tidak boleh ditafsirkan sebagai tren.")
-    with st.expander("Apa itu SPI?"):
-        st.markdown("**SPI** membandingkan hujan suatu periode dengan hujan biasanya. 0 = normal, negatif = lebih kering. Angka 3, 6, 12 = lama periode dalam bulan.")
-        st.table(KATEGORI)
-    with st.expander("Catatan teknis lengkap dari analisis"):
-        for cat in meta["catatan"]: st.write("- " + cat)
-
-# ------------------------------------------------------------------ tab peneliti
-with tab_ilmiah:
-    st.caption("Bagian ini untuk pembaca yang ingin memeriksa dasar analisisnya.")
-    gerb, sens, kor = D["gerb"], D["sens"], D["kor"]
-    if gerb is not None:
-        st.subheader("Perbandingan empat model")
-        acu = float(gerb["acuan_c"].iloc[0])
-        t = pd.DataFrame({"Model": gerb["model"], "Lolos (dari 3)": gerb["kriteria_lolos"].astype(int), "(a) skill vs klimatologi (>0)": gerb["a_crpss_t1"].round(3),
-                          "(b) rasio sebaran (≤1,10)": gerb["b_qq_rasio"].round(2), "(c) selisih frekuensi kering (≤3 poin)": (gerb["c_kering_pct"] - acu).abs().round(1),
-                          "Dipakai": np.where(gerb["tampil"].astype(bool), "ya", "")}).sort_values(["Lolos (dari 3)", "(a) skill vs klimatologi (>0)"], ascending=False).set_index("Model")
-        st.dataframe(t)
-        st.caption("Model dipakai = terbaik di antara empat (CRPS Tingkat 1 terkecil, tuning setara). Tiga kolom kriteria hanya diagnostik, bukan penentu. Belum terbukti lebih baik daripada klimatologi bila CRPSS mendekati 0.")
-    if sens is not None:
-        st.subheader("Perubahan rata-rata hujan menurut model")
-        sm = sens[sens["model"] != "Hujan GCM mentah"]; g2 = sens[sens["model"] == "Hujan GCM mentah"]["delta_mu_pct"]
-        fig = go.Figure()
-        for v, w in zip(["Dipotong (dipakai di dashboard)", "Tanpa pemotongan", "Hanya prediktor stabil"], [TEAL, ORANYE, "#6c7bd0"]):
-            dv = sm[sm["varian"] == v]
-            if not dv.empty: fig.add_trace(go.Bar(x=dv["model"], y=dv["delta_mu_pct"], name=v, marker_color=w))
-        if len(g2): fig.add_hline(y=float(g2.iloc[0]), line_dash="dash", line_color="#c2185b", annotation_text="hujan mentah GCM", annotation_position="top left")
-        fig.add_hline(y=0, line_color="#555", line_width=1); fig.update_layout(barmode="group", yaxis_title="perubahan hujan (%)"); tampil(fig, 320)
-        st.caption("Empat model memberi arah dan besar perubahan yang berbeda-beda; inilah alasan hasil dibaca sebagai 'belum ada perubahan jelas'.")
-    if kor is not None:
-        st.subheader("Korelasi dengan data pengamatan per bulan dan musim")
-        fig = go.Figure()
-        for kol_r, kol_f, nama, w in [("r_gcm_target", "lolos_fdr_gcm_target", "Hujan mentah model iklim", ABU_TUA), ("r_model_t1", "lolos_fdr_model_t1", "Model berinput ERA5", TEAL)]:
-            fig.add_trace(go.Bar(x=kor["unit"], y=kor[kol_r], name=nama, marker_color=w, text=["★" if bool(v) else "" for v in kor[kol_f]], textposition="outside"))
-        rk = float(kor["r_kritis_p05"].iloc[0])
-        for yy in (rk, -rk): fig.add_hline(y=yy, line_dash="dot", line_color="#555")
-        fig.update_layout(barmode="group", yaxis_title="korelasi (r)", yaxis_range=[-0.6, 1.05]); tampil(fig, 340)
-        st.caption(f"★ = tetap nyata setelah koreksi uji berganda (FDR); garis putus-putus = batas ±{n(rk, 2)}. "
-                   "Model berinput ERA5 diuji dengan data nyata yang sefase; angka ini <b>bukan</b> ukuran ketepatan proyeksi, karena proyeksi memakai input model iklim yang tidak sefase dengan kejadian nyata.".replace("<b>", "").replace("</b>", ""))
-    ka = meta.get("konsistensi_arah")
-    if ka and ka.get("jendela"):
-        st.subheader("Konsistensi arah dan data di luar rentang latih")
-        st.dataframe(pd.DataFrame([{"Jendela": j["jendela"], "Hujan GCM mentah (%)": j["gcm_pr_mentah_pct"], "Model terpilih (%)": j["model_pct"], "Berlawanan?": "ya" if j["berlawanan"] else "tidak",
-                                    "Input di luar rentang latih (%)": j["luar_rentang_pct"]} for j in ka["jendela"]]).set_index("Jendela"))
+st.markdown(f'<div class="foot">Sumber: {meta.get("gcm")} ({meta.get("skenario")}) diperhalus dengan model statistik · acuan pengamatan {meta.get("target")} · dijalankan {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca.{" · " + PEMBUAT if PEMBUAT else ""}</div>', unsafe_allow_html=True)
