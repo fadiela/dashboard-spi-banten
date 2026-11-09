@@ -8,17 +8,13 @@ import numpy as np, pandas as pd, streamlit as st
 import plotly.graph_objects as go
 
 # ------------------------------------------------------------------ identitas (ubah di sini)
-PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"
-PEMBIMBING = ""          # isi nama dosen pembimbing bila ingin ditampilkan
-KONTAK = ""              # mis. alamat email; kosong = tidak ditampilkan
+PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # tampil kecil di bagian bawah; kosongkan bila tak perlu
 
 st.set_page_config(page_title="Kekeringan Banten 2026-2050", page_icon="🌧️", layout="wide")
 st.markdown("""<style>
 .block-container {max-width: 1180px; padding-top: 2.2rem;}
 .hero {background: #e8f4f3; border-left: 6px solid #0f766e; border-radius: 10px; padding: 16px 20px; font-size: 1.15rem; line-height: 1.55;}
 .hero b {color: #0b5a54;}
-.kartu {background: #f6f9f9; border: 1px solid #dbe7e7; border-radius: 10px; padding: 12px 14px; height: 100%; font-size: 0.93rem; line-height: 1.5;}
-.kartu .judul {font-weight: 700; color: #0b5a54; margin-bottom: 4px;}
 .kecil {color: #5d6b6c; font-size: 0.88rem;}
 button[data-baseweb="tab"] p {font-weight: 600; font-size: 1.02rem;}
 </style>""", unsafe_allow_html=True)
@@ -92,10 +88,6 @@ KALIMAT = {"sama": "Selisihnya masih dalam naik-turun alami antar-tahun, jadi <b
            "lebih": "Bulan kering diproyeksikan <b>lebih sering</b> dari masa lalu.",
            "kurang": "Bulan kering diproyeksikan <b>lebih jarang</b> dari masa lalu.",
            "sedikit": "Data terlalu sedikit untuk disimpulkan."}
-
-
-def kartu(judul, isi):
-    return f'<div class="kartu"><div class="judul">{judul}</div>{isi}</div>'
 
 
 def tampil(fig, tinggi=360, legenda=True):
@@ -181,7 +173,7 @@ rata, base = float(meta["proyeksi_pct"][skala]), float(meta["baseline_model_send
 sel, se = rata - base, se_kasar(r["kering_pct_mean"])
 kode = tafsir(sel, se)
 
-tab_ring, tab_peta, tab_tentang, tab_ilmiah = st.tabs(["Ringkasan", "Peta", "Tentang & batasan", "Untuk peneliti"])
+tab_ring, tab_peta, tab_tentang, tab_ilmiah = st.tabs(["Ringkasan", "Peta", "Batasan & istilah", "Untuk peneliti"])
 
 # ------------------------------------------------------------------ tab ringkasan
 with tab_ring:
@@ -283,17 +275,6 @@ with tab_peta:
 
 # ------------------------------------------------------------------ tab tentang
 with tab_tentang:
-    st.subheader("Tentang dashboard ini")
-    a, b, c = st.columns(3)
-    a.markdown(kartu("Apa", "Seberapa sering bulan kering (hujan jauh di bawah normal, SPI ≤ -1) diproyeksikan terjadi di Banten, dibanding 1981-2010."), unsafe_allow_html=True)
-    b.markdown(kartu("Mengapa", "Kekeringan memengaruhi pertanian, air bersih, dan waduk. Gambaran kecenderungan membantu perencanaan, bukan pengganti prakiraan cuaca."), unsafe_allow_html=True)
-    c.markdown(kartu("Siapa", f"Dibuat oleh {PEMBUAT}." + (f" Pembimbing: {PEMBIMBING}." if PEMBIMBING else "") + (f" Kontak: {KONTAK}." if KONTAK else "") + " Untuk dosen dan staf BMKG, dan dapat dibaca masyarakat umum."), unsafe_allow_html=True)
-    st.write("")
-    d1, d2, d3 = st.columns(3)
-    d1.markdown(kartu("Di mana", "Provinsi Banten, dirinci per titik grid (sekitar 5 km) dan per kabupaten/kota."), unsafe_allow_html=True)
-    d2.markdown(kartu("Kapan", f"Proyeksi {H0}-{H1}, dibandingkan dengan 1981-2010. Data dijalankan {meta.get('tanggal_run', '-')} (notebook {meta.get('versi_notebook', '-')})."), unsafe_allow_html=True)
-    d3.markdown(kartu("Bagaimana", f"Model iklim global ({meta['gcm']}, skenario {meta['skenario']}) diperhalus ke skala Banten memakai model statistik ({str(meta['model']).replace(' [mu+V1]', '')}) yang dilatih dengan data hujan pengamatan ({meta['target']}) dan data cuaca ERA5. Hasilnya diubah menjadi indeks kekeringan SPI."), unsafe_allow_html=True)
-
     st.subheader("Batasan yang perlu diingat")
     st.markdown("- **Bukan ramalan.** Model iklim berjalan bebas, jadi tahun kering di grafik tidak sama dengan tahun kering yang akan terjadi.\n"
                 "- **Satu model iklim dan satu skenario.** Hasil model atau skenario lain bisa berbeda; rentang yang ditampilkan tidak mencakup ketidakpastian itu.\n"
