@@ -9,8 +9,10 @@ import plotly.graph_objects as go
 
 # ------------------------------------------------------------------ pengaturan yang boleh diubah
 PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # kosongkan bila tak perlu
-H_PETA, H_KECIL = 345, 150          # tinggi grafik (px), diset untuk layar 1366x768. Layar lebih besar: naikkan (mis. 470 dan 205)
-UKURAN_TEKS = 16                    # px dasar seluruh tampilan (Streamlit memakai rem). Teks terlalu kecil/besar: ubah angka ini (13-16)
+JUDUL_PROYEK = "Downscaling GCM Hujan untuk Proyeksi Kekeringan (SPI) di Banten 2026-2050"   # ganti dengan judul proyekmu; ukuran huruf mengecil otomatis bila panjang
+H_KECIL = 138                       # tinggi tiap grafik kecil (px), diset untuk layar 1366x768 (layar besar: mis. 205)
+H_PETA = 2 * H_KECIL + 61           # tinggi peta, otomatis sejajar dengan dua grafik kecil di kanan
+UKURAN_TEKS = 14                    # px dasar seluruh tampilan (Streamlit memakai rem). Teks terlalu kecil/besar: ubah angka ini (13-16)
 st.set_page_config(page_title="Bulan kering Banten 2026-2050", page_icon="🌧️", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""<style>
 html {font-size: __UT__px;}
@@ -21,8 +23,10 @@ header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"] {di
 div[data-baseweb="select"] > div {min-height:30px;}
 .ttl {font-size:1.3rem; font-weight:700; color:#1d2b3a; line-height:1.15; white-space:nowrap;}
 .sub {font-size:.72rem; color:#6b7785; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.flabel {font-size:.65rem; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; margin:0 0 -.7rem;}
-.ph {font-size:.72rem; font-weight:700; color:#55606e; text-transform:uppercase; letter-spacing:.04em; margin:-.1rem 0 -.45rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+[data-testid="stWidgetLabel"] {min-height:0; margin-bottom:0;}
+[data-testid="stWidgetLabel"] p {font-size:.65rem !important; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; margin:0 !important;}
+.tile, .insrow, .ttl, .sub, .foot {margin-bottom:0 !important;}
+.ph {font-size:.72rem; font-weight:700; color:#55606e; text-transform:uppercase; letter-spacing:.04em; margin:0 0 .15rem !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .tile {background:#fff; border:1px solid #e1e5ea; border-top:3px solid var(--c); border-radius:7px; padding:4px 9px 5px; min-height:80px; overflow:hidden;}
 .tile .k {font-size:.68rem; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .tile .v {font-size:1.7rem; font-weight:700; color:#1d2b3a; line-height:1.15; white-space:nowrap;}
@@ -126,7 +130,8 @@ def buat_peta(df, kol, zmin, zmax, satuan, warna, lab, zmid=None):
     fig = go.Figure(go.Choroplethmap(geojson=kotak, locations=df["grid_id"].astype(int).astype(str), z=df[kol], text=df["wilayah"].fillna("Di luar batas kab/kota"), colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid,
                                      marker=dict(opacity=0.88, line=dict(width=0)), colorbar=dict(title=dict(text="", font=dict(size=9)), thickness=8, len=0.5, tickfont=dict(size=9), x=0.995),
                                      hovertemplate="<b>%{text}</b><br>%{z:.1f} " + satuan + "<extra></extra>"))
-    zoom = float(np.clip(np.log2(500 / 256 * 360 / (max(xs.max() - xs.min(), 0.2) * 1.2)) - 0.1, 5, 11))
+    lon_r, lat_r = max(xs.max() - xs.min() + 2 * h, 0.2) * 1.08, max(ys.max() - ys.min() + 2 * h, 0.2) * 1.08 / np.cos(np.radians(float(ys.mean())))
+    zoom = float(np.clip(min(np.log2(360 * 400 / (512 * lon_r)), np.log2(360 * H_PETA / (512 * lat_r))), 5, 11))      # 512 px/tile (MapLibre); lebar kartu diperkirakan 400 px
     lay = dict(style="carto-positron", center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom)
     if gj is not None: lay["layers"] = [dict(sourcetype="geojson", source=gj, type="line", color="#33474a", line=dict(width=1.3), below="")]
     fig.update_layout(map=lay)
@@ -142,12 +147,12 @@ def gambar(fig, h, legenda=False):
     except TypeError: st.plotly_chart(fig, use_container_width=True, config=cfg)
 
 
-def pilih(opsi, key, default=None, fmt=None):
+def pilih(opsi, key, label, default=None, fmt=None):
     default = default or opsi[0]
     if hasattr(st, "segmented_control"):
-        v = st.segmented_control(key, opsi, default=default, key=key, format_func=fmt or (lambda x: x), label_visibility="collapsed")
+        v = st.segmented_control(label, opsi, default=default, key=key, format_func=fmt or (lambda x: x))
         return default if v is None else v
-    return st.radio(key, opsi, index=opsi.index(default), key=key, format_func=fmt or (lambda x: x), horizontal=True, label_visibility="collapsed")
+    return st.radio(label, opsi, index=opsi.index(default), key=key, format_func=fmt or (lambda x: x), horizontal=True)
 
 
 # ================================================================== HALAMAN CATATAN (untuk pemahaman sendiri)
@@ -194,12 +199,12 @@ if str(st.query_params.get("catatan", "")) in ("1", "true", "ya"): halaman_catat
 gr_ref, LAB = wilayah_grid(len(D["grid"]))
 th_all = sorted(D["b_grid"]["tahun"].unique().tolist())
 
-c_t, c_s, c_m, c_y, c_p = st.columns([2.3, 1.45, 1.2, 1.9, 1.5], gap="small")
-c_t.markdown(f'<div class="ttl">Bulan kering di Banten {H0}-{H1}</div><div class="sub">1 model iklim vs 1981-2010 · bukan ramalan · kering = SPI ≤ -1</div>', unsafe_allow_html=True)
-with c_s: st.markdown('<div class="flabel">Jangka</div>', unsafe_allow_html=True); skala = pilih(list(meta["spi_skala"]), "skala", fmt=lambda s: NAMA_SKALA.get(s, s))
-with c_m: st.markdown('<div class="flabel">Bulan / musim</div>', unsafe_allow_html=True); musim = st.selectbox("musim", list(PRESET), label_visibility="collapsed")
-with c_y: st.markdown('<div class="flabel">Rentang tahun</div>', unsafe_allow_html=True); t0, t1 = st.select_slider("tahun", th_all, value=(th_all[0], th_all[-1]), label_visibility="collapsed")
-with c_p: st.markdown('<div class="flabel">Peta menampilkan</div>', unsafe_allow_html=True); mode = pilih(["Kering", "Selisih"], "mode_peta")
+c_t, c_s, c_m, c_y, c_p = st.columns([4.2, 1.35, 1.1, 1.7, 1.25], gap="small")
+c_t.markdown(f'<div class="ttl" style="font-size:min(1.3rem, {75 / max(len(JUDUL_PROYEK), 1):.2f}vw)">{JUDUL_PROYEK}</div><div class="sub">{meta.get("gcm")} · {meta.get("skenario")} · dibanding 1981-2010 · bukan ramalan · kering = SPI ≤ -1</div>', unsafe_allow_html=True)
+with c_s: skala = pilih(list(meta["spi_skala"]), "skala", "Jangka", fmt=lambda s: NAMA_SKALA.get(s, s))
+with c_m: musim = st.selectbox("Musim", list(PRESET))
+with c_y: t0, t1 = st.select_slider("Tahun", th_all, value=(th_all[0], th_all[-1]))
+with c_p: mode = pilih(["Kering", "Selisih"], "mode_peta", "Peta")
 bulan = PRESET[musim]
 
 # ---- agregasi
