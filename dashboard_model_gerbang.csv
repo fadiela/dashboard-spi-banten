@@ -1,5 +1,5 @@
 model,set,a_crpss_t1,a_lolos,b_qq_rasio,b_lolos,c_kering_pct,c_lolos,lolos,kriteria_lolos,acuan_c,tampil,ci_qq_memuat_nol
-GLM Gamma,P2,-0.2328,False,1.1411,False,19.1978,False,False,0,15.3801,False,True
-Random Forest,P,0.1511,True,1.008,True,18.4306,False,False,2,15.3801,False,True
-XGBoost,P,0.1919,True,1.4621,False,22.8787,False,False,1,15.3801,False,True
-Neural Net,P2,0.0752,True,0.9716,True,16.7477,True,True,3,15.3801,True,True
+GLM Gamma,P2,-0.2545,False,0.9363,True,20.6975,False,False,1,16.4886,False,True
+Random Forest,P,0.1041,True,1.0747,True,19.3749,True,True,3,16.4886,False,True
+XGBoost,P,0.1647,True,1.3236,False,24.0762,False,False,1,16.4886,True,True
+Neural Net,P2,0.0948,True,1.2596,False,21.2415,False,False,1,16.4886,False,True
