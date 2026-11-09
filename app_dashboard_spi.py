@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 # ------------------------------------------------------------------ pengaturan yang boleh diubah
 PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # kosongkan bila tak perlu
 H_PETA, H_KECIL = 345, 150          # tinggi grafik (px), diset untuk layar 1366x768. Layar lebih besar: naikkan (mis. 470 dan 205)
-UKURAN_TEKS = 14                    # px dasar seluruh tampilan (Streamlit memakai rem). Teks terlalu kecil/besar: ubah angka ini (13-16)
+UKURAN_TEKS = 16                    # px dasar seluruh tampilan (Streamlit memakai rem). Teks terlalu kecil/besar: ubah angka ini (13-16)
 st.set_page_config(page_title="Bulan kering Banten 2026-2050", page_icon="🌧️", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""<style>
 html {font-size: __UT__px;}
