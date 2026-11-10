@@ -10,8 +10,8 @@ import plotly.graph_objects as go
 # ------------------------------------------------------------------ pengaturan yang boleh diubah
 PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # kosongkan bila tak perlu
 JUDUL_PROYEK = "Downscaling GCM Hujan untuk Proyeksi Kekeringan (SPI) di Banten 2026-2050"   # ganti dengan judul proyekmu; ukuran huruf mengecil otomatis bila panjang
-H_KECIL = 138                       # tinggi tiap grafik kecil (px), diset untuk layar 1366x768 (layar besar: mis. 205)
-H_PETA = 2 * H_KECIL + 61           # tinggi peta, otomatis sejajar dengan dua grafik kecil di kanan
+H_KECIL = 150                       # tinggi tiap grafik kecil (px), diset untuk layar 1366x768 (layar besar: mis. 205)
+H_PETA = 2 * H_KECIL + 45           # tinggi peta, otomatis sejajar dengan dua grafik kecil di kanan
 UKURAN_TEKS = 14                    # px dasar seluruh tampilan (Streamlit memakai rem). Teks terlalu kecil/besar: ubah angka ini (13-16)
 st.set_page_config(page_title="Bulan kering Banten 2026-2050", page_icon="🌧️", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""<style>
@@ -36,7 +36,8 @@ div[data-baseweb="select"] > div {min-height:30px;}
 .red {background:#d1495b;} .blue {background:#2a6f97;} .gray {background:#8d99a6;} .amber {background:#e0912b;} .green {background:#2a9d8f;}
 .dot {display:inline-block; width:10px; height:10px; border-radius:50%; margin:3px 4px 0 0; background:#d9dee4;}
 .dot.ok {background:#2a9d8f;} .dot.no {background:#e0912b;}
-.insrow {white-space:nowrap; overflow:hidden;}
+.kpi {display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:.5rem;}
+.insrow {white-space:nowrap; overflow:hidden; margin-top:.45rem;}
 .ins {display:inline-block; font-size:.78rem; color:#33404d; background:#fff; border:1px solid #e1e5ea; border-radius:12px; padding:1px 9px 1px 7px; margin:0 5px 0 0;}
 .ins i {display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px;}
 .foot {font-size:.68rem; color:#8794a3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -139,8 +140,9 @@ def buat_peta(df, kol, zmin, zmax, satuan, warna, lab, zmid=None):
     return fig
 
 
-def gambar(fig, h, legenda=False):
+def gambar(fig, h, legenda=False, judul=None):
     fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=10, color="#33404d"), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, uniformtext=dict(minsize=8, mode="hide"), legend=dict(orientation="h", y=1.14, x=0, font_size=9))
+    if judul: fig.update_layout(margin=dict(l=2, r=2, t=24, b=2), title=dict(text=judul.upper(), x=0.005, xanchor="left", y=0.99, yanchor="top", font=dict(size=9.5, color="#55606e")))      # judul panel DI DALAM grafik: tak bisa tertimpa
     fig.update_xaxes(showgrid=False, linecolor="#c8cfd8"); fig.update_yaxes(gridcolor="#eef1f4", zeroline=False)
     cfg = dict(displaylogo=False, displayModeBar=False)
     try: st.plotly_chart(fig, width="stretch", config=cfg)
@@ -238,13 +240,13 @@ def tile(k, v, kecil, s, chip, cls, warna):
     return f'<div class="tile" style="--c:{warna}"><div class="k">{k}</div><div class="v">{v} <small>{kecil}</small></div><div class="s">{s}</div><span class="chip {cls}">{chip}</span></div>'
 ch_sel = {"sama": ("BELUM PASTI", "gray"), "lebih": ("LEBIH SERING KERING", "red"), "kurang": ("LEBIH JARANG KERING", "blue"), "sedikit": ("DATA SEDIKIT", "gray")}[kode]
 ch_mod = ("SEPAKAT", "green") if len(tanda) and n_searah == len(tanda) else ("CONDONG", "amber") if len(tanda) and n_searah == len(tanda) - 1 else ("TERPECAH", "red") if len(tanda) else ("-", "gray")
-k1, k2, k3, k4, k5 = st.columns(5, gap="small")
-k1.markdown(tile("Masa lalu (model)", n(base, 0), "dari 100 bulan", f"pengamatan nyata: {n(ref, 0)}", "MODEL MELEBIHKAN" if base - ref > 3 else "DEKAT PENGAMATAN", "amber" if base - ref > 3 else "green", "#e8833a"), unsafe_allow_html=True)
-k2.markdown(tile(f"Proyeksi {t0}-{t1}", n(proy, 0), "dari 100 bulan", f"{musim.lower()} · {NAMA_SKALA.get(skala, skala)}", "ENSEMBLE", "gray", PROY), unsafe_allow_html=True)
-k3.markdown(tile("Selisih", n(sel, 1, True), "bulan/100", "vs masa lalu model", *ch_sel, WARNA_CHIP[ch_sel[1]]), unsafe_allow_html=True)
-k4.markdown(tile("Searah antar model", f"{n_searah}/{len(tanda)}" if len(tanda) else "-", "model", f"selisih {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}" if selisih_model else "data model tidak ada", *ch_mod, WARNA_CHIP[ch_mod[1]]), unsafe_allow_html=True)
+TILES = []
+TILES.append(tile("Masa lalu (model)", n(base, 0), "dari 100 bulan", f"pengamatan nyata: {n(ref, 0)}", "MODEL MELEBIHKAN" if base - ref > 3 else "DEKAT PENGAMATAN", "amber" if base - ref > 3 else "green", "#e8833a"))
+TILES.append(tile(f"Proyeksi {t0}-{t1}", n(proy, 0), "dari 100 bulan", f"{musim.lower()} · {NAMA_SKALA.get(skala, skala)}", "ENSEMBLE", "gray", PROY))
+TILES.append(tile("Selisih", n(sel, 1, True), "bulan/100", "vs masa lalu model", *ch_sel, WARNA_CHIP[ch_sel[1]]))
+TILES.append(tile("Searah antar model", f"{n_searah}/{len(tanda)}" if len(tanda) else "-", "model", f"selisih {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}" if selisih_model else "data model tidak ada", *ch_mod, WARNA_CHIP[ch_mod[1]]))
 titik = "".join(f'<span class="dot {"ok" if ok else "no"}" title="{"✓" if ok else "✗"} {t}"></span>' for t, ok in cek)
-k5.markdown(f'<div class="tile" style="--c:{WARNA_CHIP[yak_c]}"><div class="k">Keyakinan</div><div class="v">{yak}</div><div class="s">{n_ok}/6 syarat · arahkan kursor</div>{titik}</div>', unsafe_allow_html=True)
+TILES.append(f'<div class="tile" style="--c:{WARNA_CHIP[yak_c]}"><div class="k">Keyakinan</div><div class="v">{yak}</div><div class="s">{n_ok}/6 syarat · arahkan kursor</div>{titik}</div>')
 
 # ---- peta & agregasi grid
 agg = gs.groupby("grid_id")["p_kering"].mean().mul(100).rename("p_kering").reset_index().merge(bs.groupby("grid_id")["kering_model_pct"].mean().reset_index(), on="grid_id").merge(gr_ref, on="grid_id")
@@ -258,39 +260,39 @@ ins = [({"sama": "gray", "lebih": "red", "kurang": "blue", "sedikit": "gray"}[ko
        ("amber" if base - ref > 3 else "green", f"Model melebihkan: {n(base, 0)} vs {n(ref, 0)}" if base - ref > 3 else "Model dekat pengamatan")]
 if selisih_model: ins.append((ch_mod[1], "Model sepakat" if ch_mod[0] == "SEPAKAT" else f"Model terpecah: {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}"))
 ins.append(("gray", f"Rawan: {BULAN[int(prof.idxmax()) - 1]}" + (f" · {rk.index[-1]}" if len(rk) else "")))
-st.markdown('<div class="insrow">' + "".join(f'<span class="ins"><i style="background:{WARNA_CHIP[c]}"></i>{t}</span>' for c, t in ins) + "</div>", unsafe_allow_html=True)
+st.markdown('<div class="kpi">' + "".join(TILES) + '</div><div class="insrow">' + "".join(f'<span class="ins"><i style="background:{WARNA_CHIP[c]}"></i>{t}</span>' for c, t in ins) + "</div>", unsafe_allow_html=True)
 
 # ---- grid panel
 col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
 with col_peta, st.container(border=True):
-    st.markdown(f'<div class="ph">Peta · {"bulan kering per 100" if mode == "Kering" else "selisih vs masa lalu"}</div>', unsafe_allow_html=True)
+    JD = f'Peta · {"bulan kering per 100" if mode == "Kering" else "selisih vs masa lalu"}'
     if mode == "Kering": fig = buat_peta(agg_in, "p_kering", 0, max(20.0, float(np.ceil(np.nanpercentile(agg_in["p_kering"], 98) / 10) * 10)), "dari 100", KERING, LAB)
     else: lim = max(5.0, float(np.ceil(np.nanpercentile(agg_in["selisih"].abs(), 98) / 5) * 5)); fig = buat_peta(agg_in, "selisih", -lim, lim, "selisih", "RdBu_r", LAB, zmid=0)
-    gambar(fig, H_PETA)
+    gambar(fig, H_PETA, judul=JD)
 with col_b:
     with st.container(border=True):
-        st.markdown('<div class="ph">Per 5 tahun · garis = masa lalu</div>', unsafe_allow_html=True)
+        JD = 'Per 5 tahun · garis = masa lalu'
         blok = per_th.groupby((per_th.index - t0) // 5).agg(["mean", lambda s: s.index.min(), lambda s: s.index.max()]); blok.columns = ["v", "a", "b"]
-        fig = go.Figure(go.Bar(x=[f"{str(int(a))[2:]}-{str(int(b))[2:]}" for a, b in zip(blok["a"], blok["b"])], y=blok["v"], marker_color=PROY, text=[n(v, 0) for v in blok["v"]], textposition="outside", textfont_size=9, cliponaxis=False, hovertemplate="%{x}<br>%{y:.1f} dari 100<extra></extra>"))
+        fig = go.Figure(go.Bar(x=[f"{str(int(a))[2:]}-{str(int(b))[2:]}" for a, b in zip(blok["a"], blok["b"])], y=blok["v"], marker_color=PROY, text=[n(v, 0) for v in blok["v"]], textposition="inside", insidetextanchor="end", textfont=dict(size=10, color="white"), hovertemplate="%{x}<br>%{y:.1f} dari 100<extra></extra>"))
         fig.add_hline(y=base, line_dash="dot", line_color=BASE, line_width=2.5)
-        fig.update_layout(yaxis_range=[0, max(blok["v"].max(), base) * 1.35]); gambar(fig, H_KECIL)
+        fig.update_layout(yaxis_range=[0, max(blok["v"].max(), base) * 1.12]); gambar(fig, H_KECIL, judul=JD)
     with st.container(border=True):
-        st.markdown('<div class="ph">Tergantung model? ★ dipakai ◆ dekat data</div>', unsafe_allow_html=True)
+        JD = 'Tergantung model? ★ dipakai ◆ dekat data'
         if len(selisih_model) >= 2:
             urut = sorted(selisih_model, key=selisih_model.get); nama_ = [m_ + (" ★" if m_ == utama else " ◆" if m_ == tr and m_ != utama else "") for m_ in urut]
             fig = go.Figure(go.Bar(y=nama_, x=[selisih_model[m_] for m_ in urut], orientation="h", marker_color=[PROY if m_ == utama else BASE if m_ == tr else ABU for m_ in urut], text=[n(selisih_model[m_], 1, True) for m_ in urut], textposition="outside", textfont_size=9, cliponaxis=False))
-            fig.add_vline(x=0, line_color="#555", line_width=1.2); fig.update_xaxes(zeroline=False); gambar(fig, H_KECIL)
+            fig.add_vline(x=0, line_color="#555", line_width=1.2); fig.update_xaxes(zeroline=False); gambar(fig, H_KECIL, judul=JD)
         else: st.caption("Data perbandingan model belum ada.")
 with col_c:
     with st.container(border=True):
-        st.markdown('<div class="ph">Bulan rawan · gelap = terpilih</div>', unsafe_allow_html=True)
+        JD = 'Bulan rawan · gelap = terpilih'
         fig = go.Figure(go.Bar(x=[BULAN[b - 1] for b in prof.index], y=prof.values, marker_color=[PROY if b in bulan else "#b8cfdd" for b in prof.index], hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>proyeksi</extra>"))
-        fig.add_trace(go.Scatter(x=[BULAN[b - 1] for b in pb.index], y=pb.values, mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>masa lalu</extra>")); fig.update_xaxes(tickvals=[BULAN[b - 1] for b in prof.index], ticktext=[BULAN[b - 1][0] for b in prof.index]); gambar(fig, H_KECIL)
+        fig.add_trace(go.Scatter(x=[BULAN[b - 1] for b in pb.index], y=pb.values, mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{x}<br>%{y:.1f} dari 100<extra>masa lalu</extra>")); fig.update_xaxes(tickvals=[BULAN[b - 1] for b in prof.index], ticktext=[BULAN[b - 1][0] for b in prof.index]); gambar(fig, H_KECIL, judul=JD)
     with st.container(border=True):
-        st.markdown('<div class="ph">Kab/kota · ◆ = masa lalu</div>', unsafe_allow_html=True)
+        JD = 'Kab/kota · ◆ = masa lalu'
         if len(rk):
             fig = go.Figure(go.Bar(y=rk.index, x=rk["p_kering"], orientation="h", marker_color=PROY, text=[n(v, 0) for v in rk["p_kering"]], textposition="outside", textfont_size=9, cliponaxis=False, hovertemplate="%{y}<br>%{x:.1f} dari 100<extra></extra>"))
-            fig.add_trace(go.Scatter(y=rk.index, x=rk["kering_model_pct"], mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{y}<br>masa lalu %{x:.1f}<extra></extra>")); gambar(fig, H_KECIL)
+            fig.add_trace(go.Scatter(y=rk.index, x=rk["kering_model_pct"], mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{y}<br>masa lalu %{x:.1f}<extra></extra>")); gambar(fig, H_KECIL, judul=JD)
         else: st.caption("Batas kab/kota belum tersedia.")
 
 st.markdown(f'<div class="foot">{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca.{" · " + PEMBUAT if PEMBUAT else ""}</div>', unsafe_allow_html=True)
