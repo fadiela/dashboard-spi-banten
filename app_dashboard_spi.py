@@ -13,7 +13,7 @@ import streamlit.components.v1 as components
 PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # kosongkan bila tak perlu
 JUDUL_PROYEK = "Downscaling GCM Hujan untuk Proyeksi Kekeringan (SPI) di Banten 2026-2050"   # ganti dengan judul proyekmu
 H_KPI = 100                         # tinggi blok kartu angka (px)
-H_KECIL = 164                       # tinggi tiap grafik kecil di dashboard (px), untuk layar 1366x768
+H_KECIL = 152                       # tinggi tiap grafik kecil di dashboard (px), untuk layar 1366x768
 H_PETA = 2 * H_KECIL + 45           # tinggi peta dashboard
 UKURAN_TEKS, UKURAN_TEKS_LAPORAN = 14, 15
 PETA_STYLE = "carto-positron-nolabels"   # peta dasar tanpa nama kota di luar Banten (perlu plotly>=6)
@@ -91,7 +91,7 @@ def jalur(nama):
 def muat(ver):
     d = {"meta": json.load(open(jalur("dashboard_meta.json"), encoding="utf-8"))}
     for k, nm in [("b_grid", "dashboard_bulanan_per_grid.csv.gz"), ("b_base", "dashboard_baseline_bulan_grid.csv.gz"), ("grid", "dashboard_grid.csv"),
-                  ("banding", "dashboard_model_banding.csv"), ("gerb", "dashboard_model_gerbang.csv"), ("reg", "dashboard_bulanan_regional.csv.gz")]:
+                  ("banding", "dashboard_model_banding.csv"), ("gerb", "dashboard_model_gerbang.csv"), ("reg", "dashboard_bulanan_regional.csv.gz"), ("sens", "dashboard_sensitivitas.csv")]:
         d[k] = pd.read_csv(jalur(nm)) if os.path.exists(jalur(nm)) else None
     d["gj"] = json.load(open(jalur("banten_kabkota.geojson"), encoding="utf-8")) if os.path.exists(jalur("banten_kabkota.geojson")) else None
     return d
@@ -301,7 +301,7 @@ def fig_bulan(R):
     d = R["dbulan"]; pilih_ = [m in R["bulan"] for m in d.index]
     fig = go.Figure(go.Bar(x=[BULAN[m - 1] for m in d.index], y=d.values, marker=dict(color=[MERAH if v > 0 else BIRU for v in d.values], opacity=[1 if p else 0.4 for p in pilih_]),
                            hovertemplate="%{x}<br>selisih %{y:+.1f} bulan per 100<extra></extra>"))
-    fig.add_hline(y=0, line_color="#555", line_width=1); fig.update_xaxes(tickfont=dict(size=8)); return fig
+    fig.add_hline(y=0, line_color="#555", line_width=1); fig.update_xaxes(tickfont=dict(size=10)); return fig
 
 
 def fig_model(sm):
@@ -408,8 +408,8 @@ def teks_deret(sk):
     return cara_, kes
 
 
-def fig_deret(sk):
-    s_ = D["reg"][D["reg"]["SPI"] == sk].sort_values(["tahun", "bulan"]); x = pd.to_datetime(dict(year=s_["tahun"], month=s_["bulan"], day=1))
+def fig_deret(sk, t0=None, t1=None):
+    s_ = D["reg"][D["reg"]["SPI"] == sk]; s_ = s_ if t0 is None else s_[s_["tahun"].between(t0, t1)]; s_ = s_.sort_values(["tahun", "bulan"]); x = pd.to_datetime(dict(year=s_["tahun"], month=s_["bulan"], day=1))
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=x, y=s_["spi_p90"], line=dict(width=0), hoverinfo="skip", showlegend=False))
     fig.add_trace(go.Scatter(x=x, y=s_["spi_p10"], fill="tonexty", fillcolor="rgba(47,111,143,.18)", line=dict(width=0), name="sebaran antar-simulasi (p10-p90)", hoverinfo="skip"))
@@ -418,6 +418,39 @@ def fig_deret(sk):
     fig.add_trace(go.Scatter(x=x[kr], y=s_.loc[kr, "spi_median"], mode="markers", marker=dict(color=MERAH, size=6), name="bulan kering (SPI ≤ -1)", hoverinfo="skip"))
     fig.add_hline(y=-1, line_dash="dash", line_color=MERAH, line_width=1.3); fig.add_hline(y=0, line_color="#8794a3", line_width=1)
     fig.update_yaxes(title_text="SPI"); return fig
+
+
+def deret_info(sk, t0, t1):
+    r = D["reg"]
+    if r is None: return None
+    s_ = r[(r["SPI"] == sk) & r["tahun"].between(t0, t1)].sort_values(["tahun", "bulan"]).dropna(subset=["spi_median"]).reset_index(drop=True)
+    if s_.empty: return None
+    kr = (s_["spi_median"] <= -1).to_numpy(); best = run = 0; end = -1
+    for i, x in enumerate(kr):
+        run = run + 1 if x else 0
+        if run > best: best, end = run, i
+    lab = lambda i: f"{BULAN[int(s_.loc[i, 'bulan']) - 1]} {int(s_.loc[i, 'tahun'])}"
+    mn = int(s_["spi_median"].idxmin())
+    return dict(best=best, a=lab(end - best + 1) if best else "-", b=lab(end) if best else "-", mn=lab(mn), mn_v=float(s_.loc[mn, "spi_median"]), n_k=int(kr.sum()), N=len(s_))
+
+
+def kartu_waktu_html(R, di):
+    def tile(k, v, kecil, s_, warna): return f'<div class="tile" style="--c:{warna}"><div class="k">{k}</div><div class="v">{v} <small>{kecil}</small></div><div class="s">{s_}</div></div>'
+    th = R["per_th"]; ty = int(th.idxmax())
+    T = [tile("Rangkaian kering terpanjang", di["best"], "bulan berturut", f'{di["a"]} - {di["b"]}' if di["best"] else "tidak ada", MERAH),
+         tile("Bulan paling kering", di["mn"], "", f'SPI {n(di["mn_v"], 2)}', MERAH),
+         tile("Bulan kering (SPI ≤ -1)", di["n_k"], f'dari {di["N"]} bulan', "median simulasi", PROY),
+         tile("Tahun paling sering kering", ty, "", f'{n(th.max(), 0)} dari 100 bulan', BASE)]
+    return KPI_CSS.replace("__BG__", "#f3f5f8") + '<div class="kpi">' + "".join(T) + "</div>"
+
+
+def fig_heat(sk, t0, t1):
+    G = D["b_grid"]; G = G[(G["SPI"] == sk) & G["tahun"].between(t0, t1)]
+    pv = G.groupby(["bulan", "tahun"])["p_kering"].mean().mul(100).unstack("tahun").reindex(range(1, 13))
+    zmax = max(30.0, float(np.ceil(np.nanpercentile(pv.values, 98) / 10) * 10))
+    fig = go.Figure(go.Heatmap(z=pv.values, x=pv.columns, y=[BULAN[m - 1] for m in pv.index], colorscale=KERING, zmin=0, zmax=zmax, xgap=1, ygap=1,
+                               colorbar=dict(title=dict(text="% kering", font=dict(size=9), side="top"), thickness=8, len=0.9, tickfont=dict(size=9)), hovertemplate="%{y} %{x}<br>%{z:.0f}% simulasi kering<extra></extra>"))
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=9), gridcolor="white"); fig.update_xaxes(dtick=5, tickfont=dict(size=9)); return fig
 
 
 # ================================================================== LAPORAN (?laporan=1)
@@ -560,17 +593,43 @@ if R is None: st.warning("Tidak ada data untuk pilihan ini."); st.stop()
 sm = model_selisih(skala)
 kh, cek, n_ok, yak, yak_c, am, naik, turun = kartu_html(R, sm); iframe(kh, H_KPI)
 
-col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
-with col_peta, st.container(border=True):
-    gambar(peta_dari(R, mode, H_PETA), H_PETA, judul="Peta · " + ("selisih vs masa lalu (bulan/100)" if mode == "Selisih" else "bulan kering per 100"))
-with col_b:
-    with st.container(border=True): gambar(fig_blok(R), H_KECIL, judul="Per 5 tahun · garis tegak = rentang · putus = masa lalu")
-    with st.container(border=True):
-        if len(sm) >= 2: gambar(fig_model(sm), H_KECIL, judul="Tergantung model? selisih vs masa lalu")
+t_ring, t_waktu, t_model = st.tabs(["Ringkasan", "Waktu", "Perbandingan model"])
+with t_ring:
+    col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
+    with col_peta, st.container(border=True):
+        gambar(peta_dari(R, mode, H_PETA), H_PETA, judul="Peta · " + ("selisih vs masa lalu (bulan/100)" if mode == "Selisih" else "bulan kering per 100"))
+    with col_b:
+        with st.container(border=True): gambar(fig_blok(R), H_KECIL, judul="Per 5 tahun · garis tegak = rentang · putus = masa lalu")
+        with st.container(border=True): gambar(fig_heat(skala, t0, t1), H_KECIL, judul="Peluang kering · tahun × bulan")
+    with col_c:
+        with st.container(border=True): gambar(fig_bulan(R), H_KECIL, judul="Selisih per bulan · merah = lebih kering, biru = jarang")
+        with st.container(border=True):
+            if len(R["rk"]): gambar(fig_kab(R), H_KECIL, judul="Kab/kota · ◆ = masa lalu")
+            else: st.caption("Batas kab/kota belum tersedia.")
+with t_waktu:
+    di = deret_info(skala, t0, t1)
+    if di is None or D["reg"] is None: st.caption("Data deret waktu belum tersedia.")
+    else:
+        iframe(kartu_waktu_html(R, di), H_KPI)
+        with st.container(border=True): gambar(fig_deret(skala, t0, t1), 3 * H_KECIL - 40, judul="SPI bulanan · titik merah = bulan kering (≤ -1) · pita = sebaran simulasi")
+with t_model:
+    m1, m2 = st.columns([1, 1.25], gap="small")
+    with m1, st.container(border=True):
+        if len(sm) >= 2: gambar(fig_model(sm), 2 * H_KECIL + 20, judul="Pengaruh pilihan model · selisih vs masa lalu")
         else: st.caption("Data perbandingan model belum ada.")
-with col_c:
-    with st.container(border=True): gambar(fig_bulan(R), H_KECIL, judul="Selisih per bulan · merah = lebih kering, biru = jarang")
-    with st.container(border=True):
-        if len(R["rk"]): gambar(fig_kab(R), H_KECIL, judul="Kab/kota · ◆ = masa lalu")
-        else: st.caption("Batas kab/kota belum tersedia.")
+    with m2:
+        if D["gerb"] is not None and {"a_lolos", "b_lolos", "c_lolos", "a_crpss_t1", "b_qq_rasio", "c_kering_pct", "acuan_c"} <= set(D["gerb"].columns):
+            gb = D["gerb"]; ok = lambda v: "✓" if bool(v) else "✗"
+            tab = pd.DataFrame({"Model": gb["model"] + np.where(gb["model"] == UTAMA, " (dipakai)", ""), "A. Skill vs klimatologi": [f"{ok(l)} {n(v, 3, True)}" for l, v in zip(gb["a_lolos"], gb["a_crpss_t1"])],
+                                "B. Sebaran (rasio QQ)": [f"{ok(l)} {n(v, 2)}" for l, v in zip(gb["b_lolos"], gb["b_qq_rasio"])], "C. Bulan kering per 100": [f"{ok(l)} {n(v, 1)} vs {n(a_, 1)}" for l, v, a_ in zip(gb["c_lolos"], gb["c_kering_pct"], gb["acuan_c"])]})
+            st.markdown("**Gerbang validasi**")
+            try: st.dataframe(tab, hide_index=True, width="stretch")
+            except TypeError: st.dataframe(tab, hide_index=True, use_container_width=True)
+            st.caption(f"{UTAMA or 'Model terpilih'} dipilih karena skill (A) tertinggi; belum ada model yang lolos A, B, dan C sekaligus.")
+        if D["sens"] is not None and {"model", "varian", "delta_mu_pct"} <= set(D["sens"].columns):
+            sv = D["sens"].pivot_table(index="model", columns="varian", values="delta_mu_pct", aggfunc="first").round(1)
+            sv = sv[[c for c in sv.columns if c != "Hujan GCM mentah"]] if len(sv.columns) > 1 else sv
+            st.markdown("**Uji sensitivitas prediktor** (perubahan rata-rata hujan, %)")
+            try: st.dataframe(sv, width="stretch")
+            except TypeError: st.dataframe(sv, use_container_width=True)
 st.markdown(f'<div class="foot">{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca.{" · " + PEMBUAT if PEMBUAT else ""}</div>', unsafe_allow_html=True)
