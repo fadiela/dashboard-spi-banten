@@ -6,10 +6,12 @@ Berkas data (hasil ekspor notebook 14d-14i) harus ada di folder yang sama, atau 
 import json, os
 import numpy as np, pandas as pd, streamlit as st
 import plotly.graph_objects as go
+import streamlit.components.v1 as components
 
 # ------------------------------------------------------------------ pengaturan yang boleh diubah
 PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # kosongkan bila tak perlu
 JUDUL_PROYEK = "Downscaling GCM Hujan untuk Proyeksi Kekeringan (SPI) di Banten 2026-2050"   # ganti dengan judul proyekmu; ukuran huruf mengecil otomatis bila panjang
+H_KPI = 124                         # tinggi blok kartu angka + baris insight (px); blok ini iframe berukuran tetap sehingga tidak bisa menimpa elemen lain
 H_KECIL = 150                       # tinggi tiap grafik kecil (px), diset untuk layar 1366x768 (layar besar: mis. 205)
 H_PETA = 2 * H_KECIL + 45           # tinggi peta, otomatis sejajar dengan dua grafik kecil di kanan
 UKURAN_TEKS = 14                    # px dasar seluruh tampilan (Streamlit memakai rem). Teks terlalu kecil/besar: ubah angka ini (13-16)
@@ -240,6 +242,21 @@ def tile(k, v, kecil, s, chip, cls, warna):
     return f'<div class="tile" style="--c:{warna}"><div class="k">{k}</div><div class="v">{v} <small>{kecil}</small></div><div class="s">{s}</div><span class="chip {cls}">{chip}</span></div>'
 ch_sel = {"sama": ("BELUM PASTI", "gray"), "lebih": ("LEBIH SERING KERING", "red"), "kurang": ("LEBIH JARANG KERING", "blue"), "sedikit": ("DATA SEDIKIT", "gray")}[kode]
 ch_mod = ("SEPAKAT", "green") if len(tanda) and n_searah == len(tanda) else ("CONDONG", "amber") if len(tanda) and n_searah == len(tanda) - 1 else ("TERPECAH", "red") if len(tanda) else ("-", "gray")
+KPI_CSS = """<style>
+body {margin:0; padding:2px 1px 0; background:#f3f5f8; font-family:"Segoe UI", Arial, sans-serif; color:#1d2b3a;}
+.kpi {display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:8px;}
+.tile {background:#fff; border:1px solid #e1e5ea; border-top:3px solid var(--c); border-radius:7px; padding:5px 10px 6px; height:86px; box-sizing:border-box; overflow:hidden;}
+.k {font-size:9.5px; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.v {font-size:24px; font-weight:700; line-height:1.15; white-space:nowrap;}
+.v small {font-size:10px; font-weight:500; color:#6b7785;}
+.s {font-size:10px; color:#6b7785; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.chip {display:inline-block; padding:0 8px; border-radius:9px; font-size:9.5px; font-weight:700; color:#fff; margin-top:2px; white-space:nowrap;}
+.red {background:#d1495b;} .blue {background:#2a6f97;} .gray {background:#8d99a6;} .amber {background:#e0912b;} .green {background:#2a9d8f;}
+.dot {display:inline-block; width:10px; height:10px; border-radius:50%; margin:2px 4px 0 0; background:#d9dee4;} .dot.ok {background:#2a9d8f;} .dot.no {background:#e0912b;}
+.insrow {margin-top:7px; white-space:nowrap; overflow:hidden;}
+.ins {display:inline-block; font-size:11px; color:#33404d; background:#fff; border:1px solid #e1e5ea; border-radius:12px; padding:1px 9px 1px 7px; margin:0 5px 0 0;}
+.ins i {display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px;}
+</style>"""
 TILES = []
 TILES.append(tile("Masa lalu (model)", n(base, 0), "dari 100 bulan", f"pengamatan nyata: {n(ref, 0)}", "MODEL MELEBIHKAN" if base - ref > 3 else "DEKAT PENGAMATAN", "amber" if base - ref > 3 else "green", "#e8833a"))
 TILES.append(tile(f"Proyeksi {t0}-{t1}", n(proy, 0), "dari 100 bulan", f"{musim.lower()} · {NAMA_SKALA.get(skala, skala)}", "ENSEMBLE", "gray", PROY))
@@ -260,7 +277,9 @@ ins = [({"sama": "gray", "lebih": "red", "kurang": "blue", "sedikit": "gray"}[ko
        ("amber" if base - ref > 3 else "green", f"Model melebihkan: {n(base, 0)} vs {n(ref, 0)}" if base - ref > 3 else "Model dekat pengamatan")]
 if selisih_model: ins.append((ch_mod[1], "Model sepakat" if ch_mod[0] == "SEPAKAT" else f"Model terpecah: {n(min(selisih_model.values()), 0, True)} s/d {n(max(selisih_model.values()), 0, True)}"))
 ins.append(("gray", f"Rawan: {BULAN[int(prof.idxmax()) - 1]}" + (f" · {rk.index[-1]}" if len(rk) else "")))
-st.markdown('<div class="kpi">' + "".join(TILES) + '</div><div class="insrow">' + "".join(f'<span class="ins"><i style="background:{WARNA_CHIP[c]}"></i>{t}</span>' for c, t in ins) + "</div>", unsafe_allow_html=True)
+KPI_HTML = KPI_CSS + '<div class="kpi">' + "".join(TILES) + '</div><div class="insrow">' + "".join(f'<span class="ins"><i style="background:{WARNA_CHIP[c]}"></i>{t}</span>' for c, t in ins) + "</div>"
+if hasattr(st, "iframe"): st.iframe(KPI_HTML, height=H_KPI)          # Streamlit baru
+else: components.html(KPI_HTML, height=H_KPI)                      # Streamlit lama
 
 # ---- grid panel
 col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
