@@ -1,6 +1,6 @@
 """Dashboard proyeksi bulan kering Banten 2026-2050.
   streamlit run app_dashboard_spi.py
-Tampilan:  (biasa) dashboard satu layar  |  ?laporan=1 laporan naratif siap cetak PDF  |  ?catatan=1 catatan pribadi (tidak untuk ditampilkan)
+Tampilan:  (biasa) dashboard satu layar  |  ?laporan=1 laporan naratif siap cetak PDF
 Berkas data (ekspor notebook 14d-14i) di folder yang sama, atau tunjuk lewat variabel lingkungan HASIL_DIR.
 """
 import json, os
@@ -21,7 +21,7 @@ PETA_AWAL = "Selisih"               # tampilan awal peta: "Selisih" atau "Kering
 
 st.set_page_config(page_title="Bulan kering Banten 2026-2050", page_icon="🌧️", layout="wide", initial_sidebar_state="collapsed")
 def _param(k): return str(st.query_params.get(k, "")).lower() in ("1", "true", "ya")
-LAPORAN, CATATAN = _param("laporan"), _param("catatan")
+LAPORAN = _param("laporan")
 
 CSS_UMUM = """<style>
 header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"] {display:none !important;}
@@ -101,7 +101,7 @@ try: D = muat(tuple(sorted((f, os.path.getmtime(os.path.join(FOLDER, f))) for f 
 except FileNotFoundError as e: st.error(f"Berkas data tidak ditemukan: {e.filename}"); st.stop()
 meta, gj = D["meta"], D["gj"]
 H0, H1 = int(meta["horizon"][0]), int(meta["horizon"][1])
-if D["b_grid"] is None or D["b_base"] is None or D["grid"] is None: st.error("Berkas ekspor bulanan/per-grid (sel 14e) belum ada."); st.stop()
+if D["b_grid"] is None or D["b_base"] is None or D["grid"] is None: st.error("Data belum tersedia."); st.stop()
 th_all = sorted(D["b_grid"]["tahun"].unique().tolist())
 
 
@@ -262,6 +262,9 @@ body {margin:0; padding:2px 1px 0; background:__BG__; font-family:"Segoe UI", Ar
 </style>"""
 
 
+PENDEK = {"Model terbaik": "model", "Uji 2021-25": "uji 2021-25", "Arah GCM": "arah GCM", "Input di luar rentang": "rentang input", "Bias model": "bias", "Model searah": "arah model"}
+
+
 def kartu_html(R, sm, chips=False, bg="#f3f5f8"):
     """Empat kartu angka (tanpa baris chip: isinya sudah ada di kartu dan di panel 'Cara membaca dan kesimpulan')."""
     am = arah_model(sm); cek, n_ok, yak, yak_c = keyakinan(R, am); kode = R["kode"]
@@ -272,7 +275,7 @@ def kartu_html(R, sm, chips=False, bg="#f3f5f8"):
     T = [tile("Masa lalu (model)", n(R["base"], 0), "dari 100 bulan", f'1981-2010 · pengamatan nyata: {n(R["ref"], 0)}', "▲ MODEL MELEBIHKAN" if bias else "● DEKAT PENGAMATAN", "amber" if bias else "green", BASE),
          tile(f'Proyeksi {R["t0"]}-{R["t1"]}', n(R["proy"], 0), "dari 100 bulan", f'{musim_t} · {NAMA_SKALA.get(R["skala"], R["skala"])}', "● RATA-RATA SIMULASI", "gray", PROY),
          tile("Selisih", n(R["sel"], 1, True), "bulan/100", f'proyeksi − masa lalu · batas alami ±{n(R["amb"], 1)}' if np.isfinite(R["amb"]) else "proyeksi − masa lalu model", f'{SIM[kode]} {KATA[kode].upper()}', WARNA_KODE[kode], WARNA_CHIP[WARNA_KODE[kode]]),
-         tile("Keyakinan", yak, "", f"{n_ok} dari 6 syarat terpenuhi", ("▼ KURANG: " + ", ".join(gagal).upper()) if gagal else "✓ SEMUA TERPENUHI", yak_c, WARNA_CHIP[yak_c], tip_y)]
+         tile("Keyakinan", yak, "", ("kurang: " + ", ".join(PENDEK.get(g, g) for g in gagal)) if gagal else "semua syarat terpenuhi", f"{n_ok} DARI 6 SYARAT TERPENUHI", yak_c, WARNA_CHIP[yak_c], tip_y)]
     naik = [BULAN[m - 1] for m, v in R["dbulan"].items() if v >= 3]; turun = [BULAN[m - 1] for m, v in R["dbulan"].items() if v <= -3]
     html = KPI_CSS.replace("__BG__", bg) + '<div class="kpi">' + "".join(T) + "</div>"
     return html, cek, n_ok, yak, yak_c, am, naik, turun
@@ -309,9 +312,11 @@ def fig_model(sm):
 
 
 def fig_kab(R):
-    rk = R["rk"]
-    fig = go.Figure(go.Bar(y=rk.index, x=rk["p_kering"], orientation="h", marker_color=PROY, text=[n(v, 0) for v in rk["p_kering"]], textposition="outside", textfont_size=9, cliponaxis=False, hovertemplate="%{y}<br>%{x:.1f} dari 100<extra></extra>"))
-    fig.add_trace(go.Scatter(y=rk.index, x=rk["kering_model_pct"], mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{y}<br>masa lalu %{x:.1f}<extra></extra>")); return fig
+    rk = R["rk"]; xm = float(max(rk["p_kering"].max(), rk["kering_model_pct"].max()))
+    fig = go.Figure(go.Bar(y=rk.index, x=rk["p_kering"], orientation="h", marker_color=PROY, hovertemplate="%{y}<br>%{x:.1f} dari 100<extra></extra>"))
+    fig.add_trace(go.Scatter(y=rk.index, x=rk["kering_model_pct"], mode="markers", marker=dict(symbol="diamond", size=9, color=BASE, line=dict(width=1, color="white")), hovertemplate="%{y}<br>masa lalu %{x:.1f}<extra></extra>"))
+    fig.add_trace(go.Scatter(y=rk.index, x=[xm * 1.14] * len(rk), mode="text", text=[f"<b>{n(v, 0)}</b>" for v in rk["p_kering"]], textfont=dict(size=10, color="#1d2b3a"), hoverinfo="skip"))
+    fig.update_xaxes(range=[0, xm * 1.25]); return fig
 
 
 def peta_dari(R, mode, tinggi, lebar=400):
@@ -415,26 +420,6 @@ def fig_deret(sk):
     fig.update_yaxes(title_text="SPI"); return fig
 
 
-# ================================================================== CATATAN PRIBADI
-def halaman_catatan():
-    ho, tr = meta.get("holdout") or {}, meta.get("model_transfer_terbaik") or {}
-    st.markdown("## Catatan untuk pemahaman sendiri (bukan untuk ditampilkan)")
-    st.caption("Buka dengan ?catatan=1. Laporan siap cetak: ?laporan=1. Dashboard: tanpa tambahan.")
-    st.markdown("### Aturan warna dan kata (dihitung otomatis)")
-    st.table(pd.DataFrame([
-        ["Selisih", "● BELUM PASTI bila |selisih| < 2 × galat baku antar-tahun (angka ±X di kartu = 2 × galat baku); ▲ LEBIH SERING / ▼ LEBIH JARANG bila lebih besar."],
-        ["Searah antar model", "Menghitung berapa dari 4 model yang selisihnya searah, dan arahnya. Hijau 4 dari 4; kuning 3 dari 4; merah ≤ 2 dari 4."],
-        ["Keyakinan", "Enam syarat: model terbaik dari 4; lebih baik dari klimatologi di uji 2021-2025; arah sejalan GCM mentah; input di luar rentang < 10%; baseline model dekat pengamatan (≤ 3 poin); keempat model searah. ≥ 5 TINGGI, 4 SEDANG, ≤ 3 RENDAH."],
-        ["Garis tegak di batang 5 tahun", "Nilai terendah sampai tertinggi tahunan dalam blok itu, jadi blok 41-45 yang tinggi bisa dipengaruhi satu-dua tahun ekstrem."],
-        ["Selisih per bulan", "Proyeksi dikurangi masa lalu menurut model, per bulan. Merah = lebih sering kering, biru = lebih jarang. Per bulan lebih bising dari angka tahunan dan belum diuji kebermaknaannya."]], columns=["Elemen", "Aturan"]).set_index("Elemen"))
-    st.markdown("### Penjelasan 30 detik")
-    st.info("Kami memproyeksikan seberapa sering bulan kering terjadi di Banten sampai 2050 memakai satu model iklim global yang diperhalus ke skala Banten, lalu membandingkannya dengan masa lalu menurut model yang sama. "
-            "Selisih tahunannya kecil dan masih dalam naik-turun alami, dan model statistik tidak sepakat arahnya, jadi belum ada perubahan yang bisa dipastikan. Ini gambaran kecenderungan, bukan ramalan.")
-    if ho: st.markdown(f"Hold-out 2021-2025: CRPSS {n(ho['crpss_t1'], 3, True)}, positif {ho['tahun_positif']} dari {ho['n_tahun']} tahun. Model tampil: **{meta.get('model')}**.")
-    if tr: st.markdown(f"Transfer Tingkat 2 (selisih frekuensi kering vs pengamatan, poin): {tr.get('selisih_semua')}")
-    if D["gerb"] is not None: st.dataframe(D["gerb"].round(3), hide_index=True)
-
-
 # ================================================================== LAPORAN (?laporan=1)
 def halaman_baru(): st.markdown('<div style="break-before:page"></div>', unsafe_allow_html=True)
 def cara(t): st.markdown(f'<div class="cara">{t}</div>', unsafe_allow_html=True)
@@ -455,7 +440,6 @@ def halaman_laporan():
     TP = teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, "Selisih")
     def cara2(k): st.markdown(f'<div class="cara"><b>Cara membaca:</b> {TP[k][1]}</div><div class="kes"><b>Kesimpulan:</b> {TP[k][2]}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="judul">{JUDUL_PROYEK}</div><div class="sublap">Laporan hasil proyeksi · {PEMBUAT} · analisis versi {meta.get("versi_notebook", "-")} · dijalankan {meta.get("tanggal_run", "-")}</div>', unsafe_allow_html=True)
-    st.caption("Untuk PDF: Ctrl+P → Simpan sebagai PDF → ukuran A4, orientasi Potret, margin Default, centang \"Grafik latar belakang\".")
 
     st.markdown("## 1. Ringkasan")
     st.markdown(f'**Pertanyaan:** seberapa sering bulan kering (hujan jauh di bawah normal, SPI ≤ -1) terjadi di Banten pada {H0}-{H1} dibanding 1981-2010?')
@@ -507,7 +491,18 @@ def halaman_laporan():
         cara("Kiri: skill pada data nyata sefase (CRPSS > 0 = lebih baik daripada klimatologi). Tengah: pada prediktor GCM, selisih frekuensi bulan kering terhadap pengamatan (garis putus = ±3 poin); biru = model dipakai, ungu = paling dekat pengamatan. Kanan: konsistensi per tahun hold-out.")
         st.markdown(f"- Hold-out 2021-2025: CRPSS **{n(ho['crpss_t1'], 3, True)}** untuk {UTAMA or 'model terpilih'}, positif di **{ho['tahun_positif']} dari {ho['n_tahun']}** tahun. Hanya 5 tahun, jadi dibaca sebagai pemeriksaan arah, bukan bukti.\n"
                     "- Skill sefase **tidak otomatis terbawa** ke prediktor GCM: model yang paling terampil pada data nyata belum tentu paling cocok pada prediktor GCM. Karena itu hasil dibaca sebagai selisih terhadap baseline model sendiri.")
-    else: st.info("Hasil hold-out dan transfer akan muncul setelah ekspor dari notebook v21 atau lebih baru.")
+    else: st.info("Hasil validasi hold-out tidak tersedia pada berkas data ini.")
+
+    if D["gerb"] is not None and {"a_lolos", "b_lolos", "c_lolos", "a_crpss_t1", "b_qq_rasio", "c_kering_pct", "acuan_c"} <= set(D["gerb"].columns):
+        gb = D["gerb"]; ok = lambda v: "✓" if bool(v) else "✗"
+        st.markdown("**Gerbang pemilihan model**")
+        st.table(pd.DataFrame({"Model": gb["model"] + np.where(gb["model"] == UTAMA, " (dipakai)", ""),
+                               "A. Lebih baik dari klimatologi (CRPSS Tingkat 1)": [f"{ok(l)}  {n(v, 3, True)}" for l, v in zip(gb["a_lolos"], gb["a_crpss_t1"])],
+                               "B. Sebaran sesuai pengamatan (rasio QQ)": [f"{ok(l)}  {n(v, 2)}" for l, v in zip(gb["b_lolos"], gb["b_qq_rasio"])],
+                               "C. Frekuensi bulan kering dekat pengamatan (per 100)": [f"{ok(l)}  {n(v, 1)} vs {n(a_, 1)}" for l, v, a_ in zip(gb["c_lolos"], gb["c_kering_pct"], gb["acuan_c"])]}).set_index("Model"))
+        lA = gb.loc[gb["a_lolos"].astype(bool), "model"].tolist(); lB = gb.loc[gb["b_lolos"].astype(bool), "model"].tolist(); lC = gb.loc[gb["c_lolos"].astype(bool), "model"].tolist(); semua = gb.loc[gb["lolos"].astype(bool), "model"].tolist()
+        st.markdown(f"Lolos kriteria A: {', '.join(lA) or '-'}. Lolos B: {', '.join(lB) or '-'}. Lolos C: {', '.join(lC) or '-'}. " + (f"Lolos ketiganya: {', '.join(semua)}." if semua else "**Tidak ada model yang lolos ketiganya.**")
+                    + f" {UTAMA or 'Model terpilih'} dipilih karena skill (CRPSS Tingkat 1) tertinggi di antara model yang lolos A, bukan karena satu-satunya yang lolos. Karena kriteria B dan C tidak terpenuhi, hasil dibaca sebagai selisih relatif terhadap masa lalu model.")
 
     halaman_baru(); st.markdown("## 6. Hasil")
     st.markdown("**Ringkasan tiga jangka kekeringan (sepanjang tahun)**")
@@ -550,7 +545,6 @@ def halaman_laporan():
     st.markdown(f"**C. Sumber dan versi:** {meta.get('gcm')} ({meta.get('skenario')}); {meta.get('target')}; ERA5. Notebook {meta.get('versi_notebook', '-')}, dijalankan {meta.get('tanggal_run', '-')}. Model: {meta.get('model', '-')}. Status: {meta.get('status_gerbang', '-')}.")
 
 
-if CATATAN: halaman_catatan(); st.stop()
 if LAPORAN: halaman_laporan(); st.stop()
 
 # ================================================================== DASHBOARD SATU LAYAR
@@ -579,25 +573,4 @@ with col_c:
     with st.container(border=True):
         if len(R["rk"]): gambar(fig_kab(R), H_KECIL, judul="Kab/kota · ◆ = masa lalu")
         else: st.caption("Batas kab/kota belum tersedia.")
-st.markdown(f'<div class="foot">{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca.{" · " + PEMBUAT if PEMBUAT else ""} · ▼ cara membaca di bawah</div>', unsafe_allow_html=True)
-
-# ------------------------------------------------------------------ cara membaca dan kesimpulan (di bawah layar utama)
-TP = teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, mode)
-
-
-def pan(k, warna=PROY): return f'<div class="pan" style="border-left-color:{warna}"><h4>{TP[k][0]}</h4><div><b>Cara membaca:</b> {TP[k][1]}</div><div class="kes"><b>Kesimpulan:</b> {TP[k][2]}</div></div>'
-
-
-with st.expander("Cara membaca dan kesimpulan (ikut berubah mengikuti pilihan di atas)", expanded=True):
-    st.markdown(f'<div class="pan" style="border-left-color:#8d99a6"><h4>Istilah dasar</h4>{ISTILAH}<br><b>Pengaturan:</b> Jangka = skala SPI; Musim = bulan yang dihitung; Tahun = rentang tahun proyeksi; Peta = tampilkan selisih terhadap masa lalu atau frekuensi bulan kering.</div>', unsafe_allow_html=True)
-    g1, g2, g3 = st.columns(3, gap="small")
-    g1.markdown("".join(pan(k, c) for k, c in [("k_lalu", BASE), ("k_proy", PROY), ("k_sel", WARNA_CHIP[WARNA_KODE[R["kode"]]]), ("k_yak", WARNA_CHIP[yak_c])]), unsafe_allow_html=True)
-    g2.markdown("".join(pan(k) for k in ("peta", "blok", "bulan")), unsafe_allow_html=True)
-    g3.markdown("".join(pan(k) for k in ("model", "kab")), unsafe_allow_html=True)
-    if D["gerb"] is not None and {"a_crpss_t1", "c_kering_pct", "acuan_c", "lolos"} <= set(D["gerb"].columns):
-        gb = D["gerb"]; st.markdown("**Dasar pemilihan model** (uji validasi dari notebook)")
-        tab = pd.DataFrame({"Model": gb["model"] + np.where(gb["model"] == UTAMA, " (dipakai)", ""), "Skill vs klimatologi (CRPSS, >0 = lebih baik)": gb["a_crpss_t1"].round(3),
-                            "Bulan kering model pada prediktor GCM (per 100)": gb["c_kering_pct"].round(1), "Pengamatan (per 100)": gb["acuan_c"].round(1), "Lolos semua kriteria": np.where(gb["lolos"].astype(bool), "ya", "tidak")})
-        try: st.dataframe(tab, hide_index=True, width="stretch")
-        except TypeError: st.dataframe(tab, hide_index=True, use_container_width=True)
-        st.caption((f"{UTAMA or 'Model terpilih'} dipilih karena skill tertinggi di antara empat model. " if UTAMA else "") + ("Belum ada model yang lolos semua kriteria, sehingga hasil dibaca sebagai selisih relatif terhadap masa lalu model, bukan nilai mutlak." if not gb["lolos"].astype(bool).any() else "") + " Model dengan frekuensi kering paling dekat pengamatan (ungu) belum tentu yang paling terampil (biru): keduanya menjawab pertanyaan berbeda.")
+st.markdown(f'<div class="foot">{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca.{" · " + PEMBUAT if PEMBUAT else ""}</div>', unsafe_allow_html=True)
