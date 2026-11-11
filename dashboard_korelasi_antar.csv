@@ -1,148 +1,148 @@
 jenis,sumber,baris,kolom,r
-antar-bulan,ERA5 tp,Jan,Jan,1.0
-antar-bulan,ERA5 tp,Jan,Feb,0.1909
-antar-bulan,ERA5 tp,Jan,Mar,-0.0404
-antar-bulan,ERA5 tp,Jan,Apr,0.1417
-antar-bulan,ERA5 tp,Jan,Mei,0.0248
-antar-bulan,ERA5 tp,Jan,Jun,-0.0778
-antar-bulan,ERA5 tp,Jan,Jul,0.0882
-antar-bulan,ERA5 tp,Jan,Agu,-0.0144
-antar-bulan,ERA5 tp,Jan,Sep,-0.025
-antar-bulan,ERA5 tp,Jan,Okt,-0.164
-antar-bulan,ERA5 tp,Jan,Nov,0.0493
-antar-bulan,ERA5 tp,Jan,Des,0.0911
-antar-bulan,ERA5 tp,Feb,Jan,0.1909
-antar-bulan,ERA5 tp,Feb,Feb,1.0
-antar-bulan,ERA5 tp,Feb,Mar,-0.0877
-antar-bulan,ERA5 tp,Feb,Apr,0.0572
-antar-bulan,ERA5 tp,Feb,Mei,-0.1478
-antar-bulan,ERA5 tp,Feb,Jun,-0.1367
-antar-bulan,ERA5 tp,Feb,Jul,-0.0073
-antar-bulan,ERA5 tp,Feb,Agu,-0.0804
-antar-bulan,ERA5 tp,Feb,Sep,0.18
-antar-bulan,ERA5 tp,Feb,Okt,0.0651
-antar-bulan,ERA5 tp,Feb,Nov,0.2053
-antar-bulan,ERA5 tp,Feb,Des,-0.2791
-antar-bulan,ERA5 tp,Mar,Jan,-0.0404
-antar-bulan,ERA5 tp,Mar,Feb,-0.0877
-antar-bulan,ERA5 tp,Mar,Mar,1.0
-antar-bulan,ERA5 tp,Mar,Apr,0.1064
-antar-bulan,ERA5 tp,Mar,Mei,0.1137
-antar-bulan,ERA5 tp,Mar,Jun,0.0144
-antar-bulan,ERA5 tp,Mar,Jul,-0.0329
-antar-bulan,ERA5 tp,Mar,Agu,0.1179
-antar-bulan,ERA5 tp,Mar,Sep,0.3102
-antar-bulan,ERA5 tp,Mar,Okt,0.1604
-antar-bulan,ERA5 tp,Mar,Nov,0.126
-antar-bulan,ERA5 tp,Mar,Des,0.2121
-antar-bulan,ERA5 tp,Apr,Jan,0.1417
-antar-bulan,ERA5 tp,Apr,Feb,0.0572
-antar-bulan,ERA5 tp,Apr,Mar,0.1064
-antar-bulan,ERA5 tp,Apr,Apr,1.0
-antar-bulan,ERA5 tp,Apr,Mei,0.2157
-antar-bulan,ERA5 tp,Apr,Jun,0.0092
-antar-bulan,ERA5 tp,Apr,Jul,0.2303
-antar-bulan,ERA5 tp,Apr,Agu,-0.0369
-antar-bulan,ERA5 tp,Apr,Sep,0.1276
-antar-bulan,ERA5 tp,Apr,Okt,0.0261
-antar-bulan,ERA5 tp,Apr,Nov,0.0809
-antar-bulan,ERA5 tp,Apr,Des,0.3847
-antar-bulan,ERA5 tp,Mei,Jan,0.0248
-antar-bulan,ERA5 tp,Mei,Feb,-0.1478
-antar-bulan,ERA5 tp,Mei,Mar,0.1137
-antar-bulan,ERA5 tp,Mei,Apr,0.2157
-antar-bulan,ERA5 tp,Mei,Mei,1.0
-antar-bulan,ERA5 tp,Mei,Jun,0.2283
-antar-bulan,ERA5 tp,Mei,Jul,0.4989
-antar-bulan,ERA5 tp,Mei,Agu,0.2563
-antar-bulan,ERA5 tp,Mei,Sep,0.4172
-antar-bulan,ERA5 tp,Mei,Okt,0.3743
-antar-bulan,ERA5 tp,Mei,Nov,0.1887
-antar-bulan,ERA5 tp,Mei,Des,0.0554
-antar-bulan,ERA5 tp,Jun,Jan,-0.0778
-antar-bulan,ERA5 tp,Jun,Feb,-0.1367
-antar-bulan,ERA5 tp,Jun,Mar,0.0144
-antar-bulan,ERA5 tp,Jun,Apr,0.0092
-antar-bulan,ERA5 tp,Jun,Mei,0.2283
-antar-bulan,ERA5 tp,Jun,Jun,1.0
-antar-bulan,ERA5 tp,Jun,Jul,0.7685
-antar-bulan,ERA5 tp,Jun,Agu,0.6353
-antar-bulan,ERA5 tp,Jun,Sep,0.429
-antar-bulan,ERA5 tp,Jun,Okt,0.4641
-antar-bulan,ERA5 tp,Jun,Nov,0.2984
-antar-bulan,ERA5 tp,Jun,Des,0.2057
-antar-bulan,ERA5 tp,Jul,Jan,0.0882
-antar-bulan,ERA5 tp,Jul,Feb,-0.0073
-antar-bulan,ERA5 tp,Jul,Mar,-0.0329
-antar-bulan,ERA5 tp,Jul,Apr,0.2303
-antar-bulan,ERA5 tp,Jul,Mei,0.4989
-antar-bulan,ERA5 tp,Jul,Jun,0.7685
-antar-bulan,ERA5 tp,Jul,Jul,1.0
-antar-bulan,ERA5 tp,Jul,Agu,0.6056
-antar-bulan,ERA5 tp,Jul,Sep,0.59
-antar-bulan,ERA5 tp,Jul,Okt,0.4364
-antar-bulan,ERA5 tp,Jul,Nov,0.3161
-antar-bulan,ERA5 tp,Jul,Des,0.1985
-antar-bulan,ERA5 tp,Agu,Jan,-0.0144
-antar-bulan,ERA5 tp,Agu,Feb,-0.0804
-antar-bulan,ERA5 tp,Agu,Mar,0.1179
-antar-bulan,ERA5 tp,Agu,Apr,-0.0369
-antar-bulan,ERA5 tp,Agu,Mei,0.2563
-antar-bulan,ERA5 tp,Agu,Jun,0.6353
-antar-bulan,ERA5 tp,Agu,Jul,0.6056
-antar-bulan,ERA5 tp,Agu,Agu,1.0
-antar-bulan,ERA5 tp,Agu,Sep,0.7018
-antar-bulan,ERA5 tp,Agu,Okt,0.6662
-antar-bulan,ERA5 tp,Agu,Nov,0.2923
-antar-bulan,ERA5 tp,Agu,Des,0.3278
-antar-bulan,ERA5 tp,Sep,Jan,-0.025
-antar-bulan,ERA5 tp,Sep,Feb,0.18
-antar-bulan,ERA5 tp,Sep,Mar,0.3102
-antar-bulan,ERA5 tp,Sep,Apr,0.1276
-antar-bulan,ERA5 tp,Sep,Mei,0.4172
-antar-bulan,ERA5 tp,Sep,Jun,0.429
-antar-bulan,ERA5 tp,Sep,Jul,0.59
-antar-bulan,ERA5 tp,Sep,Agu,0.7018
-antar-bulan,ERA5 tp,Sep,Sep,1.0
-antar-bulan,ERA5 tp,Sep,Okt,0.726
-antar-bulan,ERA5 tp,Sep,Nov,0.4433
-antar-bulan,ERA5 tp,Sep,Des,0.0501
-antar-bulan,ERA5 tp,Okt,Jan,-0.164
-antar-bulan,ERA5 tp,Okt,Feb,0.0651
-antar-bulan,ERA5 tp,Okt,Mar,0.1604
-antar-bulan,ERA5 tp,Okt,Apr,0.0261
-antar-bulan,ERA5 tp,Okt,Mei,0.3743
-antar-bulan,ERA5 tp,Okt,Jun,0.4641
-antar-bulan,ERA5 tp,Okt,Jul,0.4364
-antar-bulan,ERA5 tp,Okt,Agu,0.6662
-antar-bulan,ERA5 tp,Okt,Sep,0.726
-antar-bulan,ERA5 tp,Okt,Okt,1.0
-antar-bulan,ERA5 tp,Okt,Nov,0.5971
-antar-bulan,ERA5 tp,Okt,Des,0.0787
-antar-bulan,ERA5 tp,Nov,Jan,0.0493
-antar-bulan,ERA5 tp,Nov,Feb,0.2053
-antar-bulan,ERA5 tp,Nov,Mar,0.126
-antar-bulan,ERA5 tp,Nov,Apr,0.0809
-antar-bulan,ERA5 tp,Nov,Mei,0.1887
-antar-bulan,ERA5 tp,Nov,Jun,0.2984
-antar-bulan,ERA5 tp,Nov,Jul,0.3161
-antar-bulan,ERA5 tp,Nov,Agu,0.2923
-antar-bulan,ERA5 tp,Nov,Sep,0.4433
-antar-bulan,ERA5 tp,Nov,Okt,0.5971
-antar-bulan,ERA5 tp,Nov,Nov,1.0
-antar-bulan,ERA5 tp,Nov,Des,-0.1088
-antar-bulan,ERA5 tp,Des,Jan,0.0911
-antar-bulan,ERA5 tp,Des,Feb,-0.2791
-antar-bulan,ERA5 tp,Des,Mar,0.2121
-antar-bulan,ERA5 tp,Des,Apr,0.3847
-antar-bulan,ERA5 tp,Des,Mei,0.0554
-antar-bulan,ERA5 tp,Des,Jun,0.2057
-antar-bulan,ERA5 tp,Des,Jul,0.1985
-antar-bulan,ERA5 tp,Des,Agu,0.3278
-antar-bulan,ERA5 tp,Des,Sep,0.0501
-antar-bulan,ERA5 tp,Des,Okt,0.0787
-antar-bulan,ERA5 tp,Des,Nov,-0.1088
-antar-bulan,ERA5 tp,Des,Des,1.0
+antar-bulan,CHIRPS,Jan,Jan,1.0
+antar-bulan,CHIRPS,Jan,Feb,-0.2299
+antar-bulan,CHIRPS,Jan,Mar,-0.1159
+antar-bulan,CHIRPS,Jan,Apr,-0.1286
+antar-bulan,CHIRPS,Jan,Mei,0.1705
+antar-bulan,CHIRPS,Jan,Jun,0.1196
+antar-bulan,CHIRPS,Jan,Jul,0.1505
+antar-bulan,CHIRPS,Jan,Agu,-0.0402
+antar-bulan,CHIRPS,Jan,Sep,0.0124
+antar-bulan,CHIRPS,Jan,Okt,-0.1335
+antar-bulan,CHIRPS,Jan,Nov,0.1368
+antar-bulan,CHIRPS,Jan,Des,0.0303
+antar-bulan,CHIRPS,Feb,Jan,-0.2299
+antar-bulan,CHIRPS,Feb,Feb,1.0
+antar-bulan,CHIRPS,Feb,Mar,0.1304
+antar-bulan,CHIRPS,Feb,Apr,0.143
+antar-bulan,CHIRPS,Feb,Mei,-0.1857
+antar-bulan,CHIRPS,Feb,Jun,-0.1242
+antar-bulan,CHIRPS,Feb,Jul,-0.1657
+antar-bulan,CHIRPS,Feb,Agu,-0.1514
+antar-bulan,CHIRPS,Feb,Sep,-0.1336
+antar-bulan,CHIRPS,Feb,Okt,-0.1643
+antar-bulan,CHIRPS,Feb,Nov,0.0163
+antar-bulan,CHIRPS,Feb,Des,-0.0694
+antar-bulan,CHIRPS,Mar,Jan,-0.1159
+antar-bulan,CHIRPS,Mar,Feb,0.1304
+antar-bulan,CHIRPS,Mar,Mar,1.0
+antar-bulan,CHIRPS,Mar,Apr,0.0376
+antar-bulan,CHIRPS,Mar,Mei,-0.0493
+antar-bulan,CHIRPS,Mar,Jun,0.2424
+antar-bulan,CHIRPS,Mar,Jul,0.1523
+antar-bulan,CHIRPS,Mar,Agu,0.0898
+antar-bulan,CHIRPS,Mar,Sep,0.2217
+antar-bulan,CHIRPS,Mar,Okt,0.1398
+antar-bulan,CHIRPS,Mar,Nov,0.112
+antar-bulan,CHIRPS,Mar,Des,-0.0235
+antar-bulan,CHIRPS,Apr,Jan,-0.1286
+antar-bulan,CHIRPS,Apr,Feb,0.143
+antar-bulan,CHIRPS,Apr,Mar,0.0376
+antar-bulan,CHIRPS,Apr,Apr,1.0
+antar-bulan,CHIRPS,Apr,Mei,0.0425
+antar-bulan,CHIRPS,Apr,Jun,-0.1139
+antar-bulan,CHIRPS,Apr,Jul,-0.1358
+antar-bulan,CHIRPS,Apr,Agu,-0.0784
+antar-bulan,CHIRPS,Apr,Sep,-0.2807
+antar-bulan,CHIRPS,Apr,Okt,-0.0835
+antar-bulan,CHIRPS,Apr,Nov,0.0501
+antar-bulan,CHIRPS,Apr,Des,0.1027
+antar-bulan,CHIRPS,Mei,Jan,0.1705
+antar-bulan,CHIRPS,Mei,Feb,-0.1857
+antar-bulan,CHIRPS,Mei,Mar,-0.0493
+antar-bulan,CHIRPS,Mei,Apr,0.0425
+antar-bulan,CHIRPS,Mei,Mei,1.0
+antar-bulan,CHIRPS,Mei,Jun,0.3533
+antar-bulan,CHIRPS,Mei,Jul,0.3357
+antar-bulan,CHIRPS,Mei,Agu,0.2712
+antar-bulan,CHIRPS,Mei,Sep,0.2893
+antar-bulan,CHIRPS,Mei,Okt,0.3095
+antar-bulan,CHIRPS,Mei,Nov,0.0466
+antar-bulan,CHIRPS,Mei,Des,0.0983
+antar-bulan,CHIRPS,Jun,Jan,0.1196
+antar-bulan,CHIRPS,Jun,Feb,-0.1242
+antar-bulan,CHIRPS,Jun,Mar,0.2424
+antar-bulan,CHIRPS,Jun,Apr,-0.1139
+antar-bulan,CHIRPS,Jun,Mei,0.3533
+antar-bulan,CHIRPS,Jun,Jun,1.0
+antar-bulan,CHIRPS,Jun,Jul,0.6585
+antar-bulan,CHIRPS,Jun,Agu,0.4335
+antar-bulan,CHIRPS,Jun,Sep,0.6392
+antar-bulan,CHIRPS,Jun,Okt,0.4333
+antar-bulan,CHIRPS,Jun,Nov,0.2706
+antar-bulan,CHIRPS,Jun,Des,0.0317
+antar-bulan,CHIRPS,Jul,Jan,0.1505
+antar-bulan,CHIRPS,Jul,Feb,-0.1657
+antar-bulan,CHIRPS,Jul,Mar,0.1523
+antar-bulan,CHIRPS,Jul,Apr,-0.1358
+antar-bulan,CHIRPS,Jul,Mei,0.3357
+antar-bulan,CHIRPS,Jul,Jun,0.6585
+antar-bulan,CHIRPS,Jul,Jul,1.0
+antar-bulan,CHIRPS,Jul,Agu,0.4407
+antar-bulan,CHIRPS,Jul,Sep,0.6146
+antar-bulan,CHIRPS,Jul,Okt,0.2836
+antar-bulan,CHIRPS,Jul,Nov,0.2164
+antar-bulan,CHIRPS,Jul,Des,0.1488
+antar-bulan,CHIRPS,Agu,Jan,-0.0402
+antar-bulan,CHIRPS,Agu,Feb,-0.1514
+antar-bulan,CHIRPS,Agu,Mar,0.0898
+antar-bulan,CHIRPS,Agu,Apr,-0.0784
+antar-bulan,CHIRPS,Agu,Mei,0.2712
+antar-bulan,CHIRPS,Agu,Jun,0.4335
+antar-bulan,CHIRPS,Agu,Jul,0.4407
+antar-bulan,CHIRPS,Agu,Agu,1.0
+antar-bulan,CHIRPS,Agu,Sep,0.4514
+antar-bulan,CHIRPS,Agu,Okt,0.422
+antar-bulan,CHIRPS,Agu,Nov,0.0454
+antar-bulan,CHIRPS,Agu,Des,0.2309
+antar-bulan,CHIRPS,Sep,Jan,0.0124
+antar-bulan,CHIRPS,Sep,Feb,-0.1336
+antar-bulan,CHIRPS,Sep,Mar,0.2217
+antar-bulan,CHIRPS,Sep,Apr,-0.2807
+antar-bulan,CHIRPS,Sep,Mei,0.2893
+antar-bulan,CHIRPS,Sep,Jun,0.6392
+antar-bulan,CHIRPS,Sep,Jul,0.6146
+antar-bulan,CHIRPS,Sep,Agu,0.4514
+antar-bulan,CHIRPS,Sep,Sep,1.0
+antar-bulan,CHIRPS,Sep,Okt,0.6118
+antar-bulan,CHIRPS,Sep,Nov,0.5032
+antar-bulan,CHIRPS,Sep,Des,-0.1183
+antar-bulan,CHIRPS,Okt,Jan,-0.1335
+antar-bulan,CHIRPS,Okt,Feb,-0.1643
+antar-bulan,CHIRPS,Okt,Mar,0.1398
+antar-bulan,CHIRPS,Okt,Apr,-0.0835
+antar-bulan,CHIRPS,Okt,Mei,0.3095
+antar-bulan,CHIRPS,Okt,Jun,0.4333
+antar-bulan,CHIRPS,Okt,Jul,0.2836
+antar-bulan,CHIRPS,Okt,Agu,0.422
+antar-bulan,CHIRPS,Okt,Sep,0.6118
+antar-bulan,CHIRPS,Okt,Okt,1.0
+antar-bulan,CHIRPS,Okt,Nov,0.5736
+antar-bulan,CHIRPS,Okt,Des,-0.0208
+antar-bulan,CHIRPS,Nov,Jan,0.1368
+antar-bulan,CHIRPS,Nov,Feb,0.0163
+antar-bulan,CHIRPS,Nov,Mar,0.112
+antar-bulan,CHIRPS,Nov,Apr,0.0501
+antar-bulan,CHIRPS,Nov,Mei,0.0466
+antar-bulan,CHIRPS,Nov,Jun,0.2706
+antar-bulan,CHIRPS,Nov,Jul,0.2164
+antar-bulan,CHIRPS,Nov,Agu,0.0454
+antar-bulan,CHIRPS,Nov,Sep,0.5032
+antar-bulan,CHIRPS,Nov,Okt,0.5736
+antar-bulan,CHIRPS,Nov,Nov,1.0
+antar-bulan,CHIRPS,Nov,Des,-0.2655
+antar-bulan,CHIRPS,Des,Jan,0.0303
+antar-bulan,CHIRPS,Des,Feb,-0.0694
+antar-bulan,CHIRPS,Des,Mar,-0.0235
+antar-bulan,CHIRPS,Des,Apr,0.1027
+antar-bulan,CHIRPS,Des,Mei,0.0983
+antar-bulan,CHIRPS,Des,Jun,0.0317
+antar-bulan,CHIRPS,Des,Jul,0.1488
+antar-bulan,CHIRPS,Des,Agu,0.2309
+antar-bulan,CHIRPS,Des,Sep,-0.1183
+antar-bulan,CHIRPS,Des,Okt,-0.0208
+antar-bulan,CHIRPS,Des,Nov,-0.2655
+antar-bulan,CHIRPS,Des,Des,1.0
 antar-bulan,CMCC-ESM2,Jan,Jan,1.0
 antar-bulan,CMCC-ESM2,Jan,Feb,0.0632
 antar-bulan,CMCC-ESM2,Jan,Mar,0.0955
@@ -287,22 +287,22 @@ antar-bulan,CMCC-ESM2,Des,Sep,0.5567
 antar-bulan,CMCC-ESM2,Des,Okt,0.6001
 antar-bulan,CMCC-ESM2,Des,Nov,0.6126
 antar-bulan,CMCC-ESM2,Des,Des,1.0
-antar-musim,ERA5 tp,DJF,DJF,1.0
-antar-musim,ERA5 tp,DJF,MAM,-0.1123
-antar-musim,ERA5 tp,DJF,JJA,-0.2553
-antar-musim,ERA5 tp,DJF,SON,-0.0792
-antar-musim,ERA5 tp,MAM,DJF,-0.1123
-antar-musim,ERA5 tp,MAM,MAM,1.0
-antar-musim,ERA5 tp,MAM,JJA,0.2379
-antar-musim,ERA5 tp,MAM,SON,0.3428
-antar-musim,ERA5 tp,JJA,DJF,-0.2553
-antar-musim,ERA5 tp,JJA,MAM,0.2379
-antar-musim,ERA5 tp,JJA,JJA,1.0
-antar-musim,ERA5 tp,JJA,SON,0.5841
-antar-musim,ERA5 tp,SON,DJF,-0.0792
-antar-musim,ERA5 tp,SON,MAM,0.3428
-antar-musim,ERA5 tp,SON,JJA,0.5841
-antar-musim,ERA5 tp,SON,SON,1.0
+antar-musim,CHIRPS,DJF,DJF,1.0
+antar-musim,CHIRPS,DJF,MAM,-0.0297
+antar-musim,CHIRPS,DJF,JJA,-0.1504
+antar-musim,CHIRPS,DJF,SON,-0.2368
+antar-musim,CHIRPS,MAM,DJF,-0.0297
+antar-musim,CHIRPS,MAM,MAM,1.0
+antar-musim,CHIRPS,MAM,JJA,0.284
+antar-musim,CHIRPS,MAM,SON,0.2203
+antar-musim,CHIRPS,JJA,DJF,-0.1504
+antar-musim,CHIRPS,JJA,MAM,0.284
+antar-musim,CHIRPS,JJA,JJA,1.0
+antar-musim,CHIRPS,JJA,SON,0.5367
+antar-musim,CHIRPS,SON,DJF,-0.2368
+antar-musim,CHIRPS,SON,MAM,0.2203
+antar-musim,CHIRPS,SON,JJA,0.5367
+antar-musim,CHIRPS,SON,SON,1.0
 antar-musim,CMCC-ESM2,DJF,DJF,1.0
 antar-musim,CMCC-ESM2,DJF,MAM,-0.221
 antar-musim,CMCC-ESM2,DJF,JJA,-0.395
