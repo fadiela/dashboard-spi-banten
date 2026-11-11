@@ -5,7 +5,7 @@ Dashboard Streamlit proyeksi bulan kering (SPI ≤ −1) Banten, hasil downscali
 ## Tampilan
 | URL | Isi |
 |---|---|
-| `/` | Dashboard satu layar: kesimpulan, 4 kartu, peta, per 5 tahun, per bulan, per kab/kota, per model |
+| `/` | Dashboard satu layar: kesimpulan, 4 kartu, peta, per tahun, per bulan, per kab/kota, per model |
 | `/?laporan=1` | Laporan naratif siap cetak PDF (termasuk heatmap tahun × bulan dan deret SPI, untuk pemahaman sendiri) |
 | `/?embed=true` | Tanpa header/footer Streamlit (lebih bersih saat dipresentasikan) |
 | `/?tinggi=210` | Tinggi grafik kecil dalam px (default 178; naikkan di monitor besar/layar penuh) |
