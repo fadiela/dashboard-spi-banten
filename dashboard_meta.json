@@ -175,7 +175,7 @@
     },
     "catatan": "Perubahan relatif hujan rata-rata wilayah (persen) terhadap baseline: hujan GCM mentah vs mean model P (digerakkan prediktor GCM). Berlawanan = tanda berbeda, dengan |perubahan| >= toleransi pada keduanya."
   },
-  "versi_notebook": "v21",
+  "versi_notebook": "v22",
   "model_transfer_terbaik": {
     "model": "Random Forest",
     "selisih_kering_pp": 1.2347322598368642,
@@ -215,7 +215,7 @@
     "crpss_t1_cv_seleksi": 0.16551300517374645
   },
   "pemilihan_model": "terbaik di antara 4 model (CRPS Tingkat 1 terkecil, CV 1981-2020, tuning setara)",
-  "tanggal_run": "2026-11-09",
+  "tanggal_run": "2026-11-11",
   "seed": 42,
   "n_sim_proyeksi": 20,
   "prediktor_tidak_stabil": [
@@ -224,5 +224,61 @@
     "pi_prw_jbr",
     "pi_ua850_sj"
   ],
-  "ci_tingkat2_memuat_nol": true
+  "ci_tingkat2_memuat_nol": true,
+  "uji": {
+    "berkas": "dashboard_uji.csv",
+    "model": "XGBoost",
+    "periode_baseline": [
+      1981,
+      2010
+    ],
+    "periode_proyeksi": [
+      2026,
+      2050
+    ],
+    "blok_tahun": 3,
+    "n_boot": 4000,
+    "n_boot_grid": 1000,
+    "alfa_fdr": 0.05,
+    "ringkas": {
+      "SPI-3": {
+        "selisih": 1.8375,
+        "lo": -8.5756,
+        "hi": 11.0538,
+        "p": 0.872,
+        "nyata": false,
+        "bulan_nyata": 0,
+        "musim_nyata": 0,
+        "grid_nyata": 0,
+        "n_grid": 396
+      },
+      "SPI-6": {
+        "selisih": -0.2448,
+        "lo": -12.4409,
+        "hi": 9.8514,
+        "p": 0.7735,
+        "nyata": false,
+        "bulan_nyata": 0,
+        "musim_nyata": 0,
+        "grid_nyata": 0,
+        "n_grid": 396
+      },
+      "SPI-12": {
+        "selisih": 2.5164,
+        "lo": -14.5813,
+        "hi": 17.8193,
+        "p": 0.9745,
+        "nyata": false,
+        "bulan_nyata": 0,
+        "musim_nyata": 0,
+        "grid_nyata": 0,
+        "n_grid": 396
+      }
+    },
+    "catatan": [
+      "Uji membandingkan rata-rata tahunan frekuensi bulan kering proyeksi vs masa lalu model sendiri; naik-turun kedua deret tahunan diperhitungkan lewat block bootstrap.",
+      "Keluarga FDR: 17 uji (wilayah, 12 bulan, 4 musim) per skala SPI; per grid satu keluarga tersendiri.",
+      "Hanya satu GCM, satu skenario, satu anggota: ketidakpastian model, skenario, dan GCM lain tidak tercakup, jadi 'belum beda nyata' bukan bukti tidak ada perubahan."
+    ]
+  }
 }
