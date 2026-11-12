@@ -215,7 +215,7 @@
     "crpss_t1_cv_seleksi": 0.16551300517374645
   },
   "pemilihan_model": "terbaik di antara 4 model (CRPS Tingkat 1 terkecil, CV 1981-2020, tuning setara)",
-  "tanggal_run": "2026-11-11",
+  "tanggal_run": "2026-11-12",
   "seed": 42,
   "n_sim_proyeksi": 20,
   "prediktor_tidak_stabil": [

@@ -23,3 +23,6 @@ Tombol **⛶ Layar penuh** di kanan atas. Jika browser memblokir, tekan **F11** 
 
 ## Berkas
 `app_dashboard_spi.py` (aplikasi) · `dashboard_*.csv/.gz/.json` (ekspor notebook sel 14d-14f) · `banten_kabkota.geojson` · `config.toml` (tema; salin ke `.streamlit/config.toml`) · `requirements.txt`
+
+## Otomatis menyesuaikan layar
+Folder `ukuran_layar/` berisi komponen kecil yang melaporkan tinggi dan lebar jendela. Grafik mengisi sisa tinggi layar dan huruf membesar di layar lebar, termasuk saat tombol **⛶ Layar penuh** ditekan. Bila komponen tidak termuat, tampilan memakai ukuran tetap. Manual: `?vh=900&vw=1600` (paksa ukuran jendela) atau `?tinggi=200` (paksa tinggi grafik).

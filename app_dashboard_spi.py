@@ -2,7 +2,8 @@
   streamlit run app_dashboard_spi.py
 Tampilan:  (biasa) dashboard satu layar  |  ?laporan=1 laporan naratif siap cetak PDF (berisi juga heatmap dan deret SPI)
 Uji beda nyata: bila dashboard_uji.csv (notebook 14j) ada dan rentang tahun = seluruh horizon, dipakai uji formal (block bootstrap); selain itu pendekatan cepat 2 x galat baku.
-Tambahan URL: ?embed=true (tanpa header/footer Streamlit)  |  ?tinggi=200 (tinggi grafik kecil, px; naikkan di monitor besar)
+Tambahan URL: ?embed=true (tanpa header/footer Streamlit)  |  ?tinggi=200 (paksa tinggi grafik kecil, px)  |  ?vh=900&vw=1600 (paksa ukuran jendela)
+Ukuran layar: komponen ukuran_layar/ melaporkan tinggi dan lebar jendela, sehingga grafik dan huruf menyesuaikan diri (termasuk layar penuh).
 Berkas data (ekspor notebook 14d-14i) di folder yang sama, atau tunjuk lewat variabel lingkungan HASIL_DIR.
 """
 import json, os
@@ -31,8 +32,25 @@ def _angka(k, d, lo, hi):
     except Exception: return d
 
 
-H_KECIL = _angka("tinggi", H_KECIL, 120, 420)
+def _ukuran_layar():
+    """(tinggi, lebar) jendela aplikasi dalam px. Sumber: ?vh=&vw= (manual) atau komponen ukuran_layar/ (otomatis, ikut berubah saat layar penuh). (None, None) bila tak tersedia."""
+    vh, vw = _angka("vh", 0, 0, 6000), _angka("vw", 0, 0, 10000)
+    if vh and vw: return vh, vw
+    try:
+        komp = components.declare_component("ukuran_layar", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "ukuran_layar"))
+        v = komp(key="ukuran_layar", default=None)
+        if isinstance(v, dict) and v.get("h") and v.get("w"): return int(v["h"]), int(v["w"])
+    except Exception: pass
+    return None, None
+
+
+VH, VW = (None, None) if LAPORAN else _ukuran_layar()
+FSKALA = float(np.clip(VW / 1366, 1.0, 1.45)) if VW else 1.0       # layar lebar (mis. layar penuh 1080p): huruf dan kartu ikut membesar
+OVERHEAD = 92 + (H_KPI + H_BAN) * FSKALA                           # tinggi bagian atas (judul, kontrol, kartu), footer, dan jarak antar-elemen
+if str(st.query_params.get("tinggi", "")).isdigit(): H_KECIL = _angka("tinggi", H_KECIL, 120, 700)       # paksa manual
+elif VH: H_KECIL = int(np.clip((VH - OVERHEAD - 10) / 2, 120, 700))                                       # otomatis: dua baris grafik mengisi sisa tinggi layar
 H_PETA = 2 * H_KECIL + 10           # peta = tinggi dua baris grafik
+LEBAR_PETA = int(((VW or 1364) - 30) * 0.30)
 
 CSS_UMUM = """<style>
 header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"] {display:none !important;}
@@ -45,13 +63,14 @@ div[data-testid="stWidgetLabel"] {min-height:0; margin-bottom:0;}
 }
 </style>"""
 CSS_DASH = """<style>
-html {font-size: __UT__px;}
+html {font-size: clamp(14px, 1.1vw, 21px);}
 .stApp {background:#f3f5f8;}
 @page {size: A4 landscape; margin: 6mm;}
 .block-container {padding:.45rem .8rem .2rem; max-width:100%;}
 [data-testid="stVerticalBlock"] {gap:.3rem;}
 div[data-baseweb="select"] > div {min-height:30px;}
-.ttl {font-size:1.3rem; font-weight:700; color:#1d2b3a; line-height:1.15; white-space:nowrap;}
+[data-testid="stColumn"] {min-width:0;}
+.ttl {font-size:clamp(.95rem, 1.2vw, 1.3rem); font-weight:700; color:#1d2b3a; line-height:1.15; white-space:normal; overflow-wrap:anywhere;}
 .sub {font-size:.72rem; color:#6b7785; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 div[data-testid="stWidgetLabel"] p {font-size:.65rem !important; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; margin:0 !important;}
 .ttl, .sub, .foot {margin-bottom:0 !important;}
@@ -197,6 +216,14 @@ def gambar(fig, h, judul=None, legenda=False):
     fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=11, color="#33404d"), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, uniformtext=dict(minsize=9, mode="hide"), legend=dict(orientation="h", y=1.14, x=0, font_size=10))
     if judul: fig.update_layout(margin=dict(l=2, r=2, t=24, b=2), title=dict(text=judul.upper(), x=0.005, xanchor="left", y=0.99, yanchor="top", font=dict(size=10.5, color="#55606e")))      # judul panel DI DALAM grafik
     fig.update_xaxes(showgrid=False, linecolor="#c8cfd8"); fig.update_yaxes(gridcolor="#eef1f4", zeroline=False)
+    if FSKALA > 1.01:      # layar lebar: perbesar huruf grafik (sumbu, label batang, judul, catatan)
+        fs = lambda v: round(v * FSKALA, 1); fig.update_layout(font_size=fs(11)); fig.update_xaxes(tickfont_size=fs(10)); fig.update_yaxes(tickfont_size=fs(10))
+        for tr in fig.data:
+            try: tr.textfont.size = fs(10)
+            except Exception: pass
+        try: fig.layout.title.font.size = fs(10.5)
+        except Exception: pass
+        for an in fig.layout.annotations: an.font.size = fs(10.5)
     cfg = dict(displaylogo=False, displayModeBar=False)
     try: st.plotly_chart(fig, width="stretch", config=cfg)
     except TypeError: st.plotly_chart(fig, use_container_width=True, config=cfg)
@@ -292,7 +319,7 @@ def keyakinan(R, am):
 
 
 KPI_CSS = """<style>
-body {margin:0; padding:2px 1px 0; background:__BG__; font-family:"Segoe UI", Arial, sans-serif; color:#1d2b3a; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+body {margin:0; padding:2px 1px 0; zoom:__Z__; background:__BG__; font-family:"Segoe UI", Arial, sans-serif; color:#1d2b3a; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
 .kpi {display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px;}
 .tile {background:#fff; border:1px solid #e1e5ea; border-top:3px solid var(--c); border-radius:7px; padding:5px 10px 6px; height:88px; box-sizing:border-box; overflow:hidden;}
 .k {font-size:10.5px; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -313,7 +340,7 @@ body {margin:0; padding:2px 1px 0; background:__BG__; font-family:"Segoe UI", Ar
 PENDEK = {"Model terbaik": "model terbaik", "Uji 2021-25": "uji 2021-25", "Arah GCM": "arah GCM", "Input di luar rentang": "input di luar rentang", "Bias model": "bias model", "Model searah": "model searah"}
 
 
-def kartu_html(R, sm, chips=False, bg="#f3f5f8", atas=""):
+def kartu_html(R, sm, chips=False, bg="#f3f5f8", atas="", zoom=1.0):
     """Empat kartu: (1) selisih, (2) rentang 4 model, (3) ketepatan masa lalu model, (4) keyakinan (6 titik = 6 syarat). Angka mutlak proyeksi tidak ditampilkan."""
     am = arah_model(sm); cek, n_ok, yak, yak_c = keyakinan(R, am); kode = R["kode"]
     def tile(k, v, kecil, s_, chip, cls, warna, tip=""): return f'<div class="tile" style="--c:{warna}" title="{tip}"><div class="k">{k}</div><div class="v">{v} <small>{kecil}</small></div><div class="s">{s_}</div><span class="chip {cls}">{chip}</span></div>'
@@ -336,7 +363,7 @@ def kartu_html(R, sm, chips=False, bg="#f3f5f8", atas=""):
          tile("Keyakinan", f'{yak} {titik}', "", ("belum: " + ", ".join(PENDEK.get(g, g) for g in gagal)) if gagal else "semua syarat terpenuhi", f"{n_ok} DARI 6 SYARAT TERPENUHI", yak_c, WARNA_CHIP[yak_c], tip_y)]
     dm = R["dbulan"]; ny = R["bulan_nyata"].reindex(dm.index).fillna(False)
     naik = [BULAN[m - 1] for m, v in dm.items() if v >= 3 and ny[m]]; turun = [BULAN[m - 1] for m, v in dm.items() if v <= -3 and ny[m]]
-    html = KPI_CSS.replace("__BG__", bg) + atas + '<div class="kpi">' + "".join(T) + "</div>"
+    html = KPI_CSS.replace("__BG__", bg).replace("__Z__", str(round(zoom, 3))) + atas + '<div class="kpi">' + "".join(T) + "</div>"
     return html, cek, n_ok, yak, yak_c, am, naik, turun
 
 
@@ -684,17 +711,17 @@ with c_m: musim = st.selectbox("Musim", list(PRESET))
 with c_y: t0, t1 = st.select_slider("Tahun", th_all, value=(th_all[0], th_all[-1]))
 with c_p: mode = pilih(["Selisih", "Kering", "Bias"], "mode_peta", "Peta", default=PETA_AWAL)
 with c_f: iframe(LAYAR_PENUH, 52)
-c_t.markdown(f'<div class="ttl" style="font-size:min(1.3rem, {75 / max(len(JUDUL_PROYEK), 1):.2f}vw)">{JUDUL_PROYEK}</div><div class="sub">{meta.get("gcm")} · {meta.get("skenario")} · periode {t0}-{t1} · vs 1981-2010 · kering = SPI ≤ −1</div>', unsafe_allow_html=True)
+c_t.markdown(f'<div class="ttl">{JUDUL_PROYEK}</div><div class="sub">{meta.get("gcm")} · {meta.get("skenario")} · periode {t0}-{t1} · vs 1981-2010 · kering = SPI ≤ −1</div>', unsafe_allow_html=True)
 
 R = ringkas(skala, PRESET[musim], t0, t1)
 if R is None: st.warning("Tidak ada data untuk pilihan ini."); st.stop()
 sm = model_selisih(skala, t0, t1, R=R); am0 = arah_model(sm)
-kh, cek, n_ok, yak, yak_c, am, naik, turun = kartu_html(R, sm, atas=banner(R, sm, am0)[0])
-iframe(kh, H_KPI + H_BAN)
+kh, cek, n_ok, yak, yak_c, am, naik, turun = kartu_html(R, sm, atas=banner(R, sm, am0)[0], zoom=FSKALA)
+iframe(kh, int((H_KPI + H_BAN) * FSKALA))
 
 col_peta, col_b, col_c = st.columns([3.6, 4.2, 4.2], gap="small")
 with col_peta:
-    gambar(peta_dari(R, mode, H_PETA, 420), H_PETA, judul={"Selisih": "Peta · selisih vs masa lalu · pudar = belum pasti", "Kering": "Peta · bulan kering per 100 bulan", "Bias": "Peta · bias masa lalu: model − nyata (bln/100)"}[mode])
+    gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA), H_PETA, judul={"Selisih": "Peta · selisih vs masa lalu · pudar = belum pasti", "Kering": "Peta · bulan kering per 100 bulan", "Bias": "Peta · bias masa lalu: model − nyata (bln/100)"}[mode])
 with col_b:
     gambar(fig_tahun(R), H_KECIL, judul="Per tahun · garis tebal = rata-rata 5 tahun · putus = masa lalu")
     gambar(fig_bulan(R), H_KECIL, judul="Per bulan · warna = beda nyata · abu = belum pasti")
