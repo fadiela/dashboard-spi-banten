@@ -6,7 +6,7 @@ Tambahan URL: ?embed=true (tanpa header/footer Streamlit)  |  ?tinggi=200 (paksa
 Ukuran layar: komponen ukuran_layar/ melaporkan tinggi dan lebar jendela, sehingga grafik dan huruf menyesuaikan diri (termasuk layar penuh).
 Berkas data (ekspor notebook 14d-14i) di folder yang sama, atau tunjuk lewat variabel lingkungan HASIL_DIR.
 """
-import json, os
+import json, math, os
 import numpy as np, pandas as pd, streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -243,6 +243,17 @@ def iframe(html, tinggi):
 
 
 # ------------------------------------------------------------------ analisis (dipakai dashboard dan laporan)
+def _nyata_bh(sel, se, q=0.05):
+    """Beda nyata dengan koreksi uji berganda (Benjamini-Hochberg, FDR q) dari z = selisih / galat baku (hampiran normal). Mengembalikan bool dengan indeks sama."""
+    sel = pd.Series(sel).astype(float); se = pd.Series(se, index=sel.index).astype(float)
+    z = (sel / se).abs(); ok = z.notna() & np.isfinite(z); p = pd.Series(np.nan, index=sel.index); p[ok] = [math.erfc(v / math.sqrt(2)) for v in z[ok]]
+    out = pd.Series(False, index=sel.index); pv = p[ok].sort_values(); m = len(pv)
+    if m:
+        lolos = pv.to_numpy() <= q * np.arange(1, m + 1) / m
+        if lolos.any(): out[pv.index[: int(np.max(np.where(lolos)[0])) + 1]] = True
+    return out
+
+
 def ringkas(skala, bulan, t0, t1):
     G = D["b_grid"][D["b_grid"]["SPI"] == skala]; B = D["b_base"][D["b_base"]["SPI"] == skala]
     gs = G[G["bulan"].isin(bulan) & G["tahun"].between(t0, t1)]; bs = B[B["bulan"].isin(bulan)]
@@ -255,7 +266,7 @@ def ringkas(skala, bulan, t0, t1):
     agg["selisih"] = agg["p_kering"] - agg["kering_model_pct"]
     yg = gs.groupby(["grid_id", "tahun"])["p_kering"].mean().mul(100).unstack("tahun")        # naik-turun antar-tahun tiap kotak
     se_g = (yg.std(axis=1, ddof=1) / np.sqrt(yg.notna().sum(axis=1))).rename("se_g").reset_index()
-    agg = agg.merge(se_g, on="grid_id", how="left"); agg["nyata"] = (agg["selisih"].abs() >= 2 * agg["se_g"]).fillna(False)     # kotak "beda nyata" bila selisih >= 2 x galat baku
+    agg = agg.merge(se_g, on="grid_id", how="left"); agg["nyata"] = _nyata_bh(agg["selisih"], agg["se_g"])     # kotak "beda nyata" bila selisih >= 2 x galat baku
     R["agg"] = agg[agg["wilayah"].notna()] if gj is not None else agg
     rk = R["agg"].dropna(subset=["wilayah"]).groupby("wilayah")[["p_kering", "kering_model_pct"]].mean().sort_values("p_kering") if gj is not None else pd.DataFrame()
     if len(rk): rk.index = nama_pendek(rk.index.tolist())
@@ -264,7 +275,7 @@ def ringkas(skala, bulan, t0, t1):
     R["dbulan"] = R["prof"] - R["pb"]
     ym = G[G["tahun"].between(t0, t1)].groupby(["bulan", "tahun"])["p_kering"].mean().mul(100).unstack("tahun")
     se_m = ym.std(axis=1, ddof=1) / np.sqrt(ym.notna().sum(axis=1))
-    R["bulan_nyata"] = (R["dbulan"].abs() >= 2 * se_m.reindex(R["dbulan"].index)).fillna(False)      # bulan "beda nyata" bila selisih >= 2 x galat baku antar-tahun
+    R["bulan_nyata"] = _nyata_bh(R["dbulan"], se_m.reindex(R["dbulan"].index))      # bulan "beda nyata" bila selisih >= 2 x galat baku antar-tahun
     R["uji"], R["ci"] = "cepat", None
     U = D.get("uji"); MUSIM_KODE = {"Des-Feb": "DJF", "Mar-Mei": "MAM", "Jun-Agu": "JJA", "Sep-Nov": "SON"}
     if U is not None and t0 == H0 and t1 == H1 and {"SPI", "jenis", "unit", "nyata_fdr", "ci_lo", "ci_hi"} <= set(U.columns):      # uji formal dari notebook 14j (seluruh horizon)
@@ -306,15 +317,15 @@ if TRANSFER is None and D["gerb"] is not None and {"c_kering_pct", "acuan_c"} <=
 
 
 def keyakinan(R, am):
-    ho = meta.get("holdout") or {}; ka = (meta.get("konsistensi_arah") or {}).get("jendela") or []
+    ho = meta.get("holdout") or {}; rl = meta.get("rolling_origin") or {}; ka = (meta.get("konsistensi_arah") or {}).get("jendela") or []
     jd = next((j for j in ka if j["jendela"] == f"{H0}-{H1}"), None); luar = (meta.get("baris_prediktor_luar_rentang_pct") or {}).get(f"{H0}-{H1}")
     cek = [("Model terbaik", "Model dipilih sebagai yang terbaik di antara empat model (tuning setara)", "terbaik dari 4" in str(meta.get("status_gerbang", "")), str(meta.get("status_gerbang", "-"))),
-           ("Uji 2021-25", "Lebih baik daripada klimatologi pada hold-out 2021-2025", bool(ho.get("lebih_baik_dari_klimatologi")), f"CRPSS {n(ho['crpss_t1'], 3, True)}, positif {ho['tahun_positif']} dari {ho['n_tahun']} tahun" if ho else "belum tersedia di berkas hasil"),
+           ("Uji rolling-origin", "Lebih baik daripada klimatologi pada rolling-origin 1996-2020 (model dipakai)", bool(rl.get("lebih_baik")), f"CRPSS {n(rl['crpss'], 3, True)}, positif {rl['fold_positif']} dari {rl['n_fold']} lipatan" if rl else "belum tersedia di berkas hasil"),
            ("Arah GCM", "Arah perubahan hujan sejalan dengan hujan mentah GCM", jd is not None and not jd["berlawanan"], f"GCM mentah {n(jd['gcm_pr_mentah_pct'], 1, True)}% vs model {n(jd['model_pct'], 1, True)}%" if jd else "belum tersedia"),
            ("Input di luar rentang", "Data masukan yang di luar rentang latih < 10%", luar is not None and luar < 10, f"{n(luar, 0)}% baris prediktor di luar rentang" if luar is not None else "belum tersedia"),
            ("Bias model", "Baseline model dekat pengamatan (selisih ≤ 3 poin)", abs(R["base"] - R["ref"]) <= 3, f"model {n(R['base'], 0)} vs pengamatan {n(R['ref'], 0)} dari 100 bulan"),
-           ("Model searah", "Keempat model memberi arah yang sama", am["N"] >= 2 and am["n_s"] == am["N"], f"{am['n_s']} dari {am['N']} model searah")]
-    n_ok = sum(c[2] for c in cek); yak, yak_c = ("TINGGI", "green") if n_ok >= 5 else ("SEDANG", "amber") if n_ok == 4 else ("RENDAH", "red")
+           ("Model searah", "Semua model memberi arah yang sama", am["N"] >= 2 and am["n_s"] == am["N"], f"{am['n_s']} dari {am['N']} model searah")]
+    n_ok = sum(c[2] for c in cek); yak, yak_c = (f"{n_ok}/6", "green" if n_ok >= 5 else "amber" if n_ok >= 3 else "red")
     return cek, n_ok, yak, yak_c
 
 
@@ -337,7 +348,7 @@ body {margin:0; padding:2px 1px 0; zoom:__Z__; background:__BG__; font-family:"S
 </style>"""
 
 
-PENDEK = {"Model terbaik": "model terbaik", "Uji 2021-25": "uji 2021-25", "Arah GCM": "arah GCM", "Input di luar rentang": "input di luar rentang", "Bias model": "bias model", "Model searah": "model searah"}
+PENDEK = {"Model terbaik": "model terbaik", "Uji rolling-origin": "uji rolling-origin", "Arah GCM": "arah GCM", "Input di luar rentang": "input di luar rentang", "Bias model": "bias model", "Model searah": "model searah"}
 
 
 def kartu_html(R, sm, chips=False, bg="#f3f5f8", atas="", zoom=1.0):
@@ -358,9 +369,9 @@ def kartu_html(R, sm, chips=False, bg="#f3f5f8", atas="", zoom=1.0):
     else: m_v, m_s, m_chip, m_cls = "-", "data perbandingan model belum ada", "● BELUM ADA", "gray"
     T = [tile("Selisih bulan kering", n(R["sel"], 1, True), "dari 100 bulan", (f'proyeksi − masa lalu · selang 95%: {n(R["ci"][0], 1, True)} s/d {n(R["ci"][1], 1, True)}' if R.get("ci") else f'proyeksi − masa lalu · naik-turun alami ±{n(R["amb"], 1)}') if np.isfinite(R["amb"]) else "proyeksi − masa lalu model", f'{SIM[kode]} {KATA[kode].upper()}', WARNA_KODE[kode], WARNA_CHIP[WARNA_KODE[kode]],
                "Selisih frekuensi bulan kering (proyeksi dikurangi masa lalu model). Bila lebih kecil dari batas naik-turun alami, belum bisa disebut perubahan."),
-         tile("Rentang 4 model", m_v, "bln/100", m_s, m_chip, m_cls, WARNA_CHIP[m_cls], "Selisih yang sama dihitung dengan GLM, Random Forest, XGBoost, dan Neural Net."),
+         tile("Rentang antar-model", m_v, "bln/100", m_s, m_chip, m_cls, WARNA_CHIP[m_cls], "Selisih yang sama dihitung dengan GLM, Random Forest, XGBoost, dan Neural Net."),
          tile("Masa lalu 1981-2010", f'{n(R["base"], 0)} vs {n(R["ref"], 0)}', "model vs nyata", "bulan kering per 100 bulan", b_chip, b_cls, WARNA_CHIP[b_cls], "Model dibandingkan pengamatan CHIRPS pada periode yang sama. Bila beda jauh, baca selisih, bukan angka mutlak."),
-         tile("Keyakinan", f'{yak} {titik}', "", ("belum: " + ", ".join(PENDEK.get(g, g) for g in gagal)) if gagal else "semua syarat terpenuhi", f"{n_ok} DARI 6 SYARAT TERPENUHI", yak_c, WARNA_CHIP[yak_c], tip_y)]
+         tile("Syarat terpenuhi", f'{yak} {titik}', "", ("belum: " + ", ".join(PENDEK.get(g, g) for g in gagal)) if gagal else "semua syarat terpenuhi", f"{n_ok} DARI 6 SYARAT TERPENUHI", yak_c, WARNA_CHIP[yak_c], tip_y)]
     dm = R["dbulan"]; ny = R["bulan_nyata"].reindex(dm.index).fillna(False)
     naik = [BULAN[m - 1] for m, v in dm.items() if v >= 3 and ny[m]]; turun = [BULAN[m - 1] for m, v in dm.items() if v <= -3 and ny[m]]
     html = KPI_CSS.replace("__BG__", bg).replace("__Z__", str(round(zoom, 3))) + atas + '<div class="kpi">' + "".join(T) + "</div>"
@@ -380,8 +391,8 @@ def banner(R, sm, am):
         gcm_t = f"Model iklim (GCM) tidak sefase dengan hujan nyata ({nl} dari {nk} uji korelasi lolos)" if nl == 0 else f"Model iklim (GCM) hanya sefase dengan hujan nyata pada {nl} dari {nk} uji korelasi"
     else: gcm_t = "Model iklim (GCM) berjalan bebas dan tidak sefase dengan hujan nyata"
     ny_b, ny_g = int(R["bulan_nyata"].fillna(False).sum()), int(R["agg"]["nyata"].sum())
-    cat = (f"Beda nyata: {ny_b} dari {len(R['bulan_nyata'])} bulan, {ny_g} dari {len(R['agg'])} kotak peta. " + gcm_t + ", jadi hanya selisih relatif yang dibaca."
-           + (" Keempat model statistik tidak sepakat arahnya." if am["N"] >= 2 and am["n_s"] < am["N"] else ""))
+    cat = (f"Beda nyata: {ny_b} dari {len(R['bulan_nyata'])} bulan, {ny_g} dari {len(R['agg'])} kotak peta. " + gcm_t + ", jadi hanya selisih relatif yang dibaca." + (" " + str(meta.get("klaim_arah_teks", "")) if meta.get("klaim_arah") == "belum_dapat_disimpulkan" else "")
+           + (" Model statistik tidak sepakat arahnya." if am["N"] >= 2 and am["n_s"] < am["N"] else ""))
     return f'<div class="verd" style="--c:{WARNA_CHIP[WARNA_KODE[kode]]}">{utama}<small>{cat}</small></div>', WARNA_CHIP[WARNA_KODE[kode]]
 
 
@@ -460,14 +471,14 @@ def teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, mode):
                 "kurang": f"Selisih {n(sel, 1, True)} lebih besar daripada batas naik-turun alami ({amb_t}): bulan kering diproyeksikan <b>lebih jarang</b>.",
                 "sedikit": "Data terlalu sedikit untuk disimpulkan."}
     T = {}
-    am_t = (f"Rentang {n(min(sm.values()), 1, True)} s/d {n(max(sm.values()), 1, True)} bulan per 100. " + ("Keempat model searah." if am["N"] >= 2 and am["n_s"] == am["N"] else "Model tidak sepakat arahnya, jadi <b>tanda perubahan bergantung pada model yang dipilih</b>.")) if len(sm) >= 2 else "Data perbandingan model belum ada."
+    am_t = (f"Rentang {n(min(sm.values()), 1, True)} s/d {n(max(sm.values()), 1, True)} bulan per 100. " + ("Semua model searah." if am["N"] >= 2 and am["n_s"] == am["N"] else "Model tidak sepakat arahnya, jadi <b>tanda perubahan bergantung pada model yang dipilih</b>.")) if len(sm) >= 2 else "Data perbandingan model belum ada."
     T["k_sel"] = ("Kartu: selisih", "Proyeksi dikurangi masa lalu model (bulan kering per 100 bulan). Angka ± adalah batas naik-turun alami antar-tahun (2 × galat baku): selisih di bawah batas ini belum bisa dipastikan.", KODE_KES[kode])
     T["k_model"] = ("Kartu: rentang model", "Selisih yang sama dihitung dengan empat model statistik (GLM, Random Forest, XGBoost, Neural Net). Bila rentangnya melewati 0, tanda perubahan bergantung pada model.", am_t)
     T["k_lalu"] = ("Kartu: masa lalu model vs nyata", f"Dari 100 bulan pada 1981-2010, berapa yang kering menurut model dan menurut pengamatan (CHIRPS). Sebagai acuan, SPI dirancang agar sekitar 16 dari 100 bulan kering.",
                    (f"Model memberi {n(R['base'], 0)} vs {n(R['ref'], 0)} pengamatan: model <b>terlalu kering</b> sekitar {n(bias, 0)} bulan per 100. Karena itu angka mutlak proyeksi tidak ditampilkan; yang dibaca adalah <b>selisih</b> terhadap masa lalu model yang sama." if bias > 3
                     else f"Model memberi {n(R['base'], 0)} vs {n(R['ref'], 0)} pengamatan, cukup dekat." if bias > -3 else f"Model memberi {n(R['base'], 0)} vs {n(R['ref'], 0)} pengamatan: model <b>terlalu basah</b>; baca selisih, bukan angka mutlak."))
-    T["k_yak"] = ("Kartu: keyakinan", "Enam titik = enam syarat: model terbaik, uji hold-out 2021-2025, arah sejalan hujan GCM, input di luar rentang latih, bias model, dan kesepakatan antar-model. Hijau = terpenuhi, oranye = belum.",
-                  f"Keyakinan <b>{yak.lower()}</b>: {n_ok} dari 6 syarat terpenuhi." + (" Belum terpenuhi: " + "; ".join(gagal) + "." if gagal else ""))
+    T["k_yak"] = ("Kartu: syarat terpenuhi", "Enam titik = enam syarat: model terbaik, uji rolling-origin 1996-2020, arah sejalan hujan GCM, input di luar rentang latih, bias model, dan kesepakatan antar-model. Hijau = terpenuhi, oranye = belum.",
+                  f"Syarat terpenuhi: <b>{n_ok} dari 6</b> (daftar periksa, bukan skor statistik)." + (" Belum terpenuhi: " + "; ".join(gagal) + "." if gagal else ""))
     # peta
     a, rk = R["agg"], R["rk"]
     if mode == "Kering":
@@ -506,7 +517,7 @@ def teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, mode):
         if UTAMA in sm and am["arah"] and abs(sm[UTAMA]) >= 0.5 and (sm[UTAMA] > 0) != (am["arah"] == "lebih") and am["n_s"] < am["N"]: kes_o += f" Model yang dipakai ({UTAMA}, {n(sm[UTAMA], 1, True)}) berlawanan dengan mayoritas, jadi hasil utama sebaiknya tidak dibaca sebagai arah yang pasti."
         elif UTAMA in sm: kes_o += f" Model yang dipakai ({UTAMA}) = {n(sm[UTAMA], 1, True)}."
     else: kes_o = "Data perbandingan model belum ada."
-    T["model"] = ("Apakah hasil tergantung model?", "Tiap batang = selisih (proyeksi − masa lalu) menurut satu model statistik; kanan = lebih sering kering, kiri = lebih jarang. Biru = model yang dipakai (skill terbaik pada uji), ungu = model yang frekuensi keringnya paling dekat pengamatan, abu = pembanding.", kes_o)
+    T["model"] = ("Apakah hasil tergantung model?", "Tiap batang = selisih (proyeksi − masa lalu) menurut satu model statistik; kanan = lebih sering kering, kiri = lebih jarang. Biru = model yang dipakai (peringkat gabungan Tingkat 1 + 2), ungu = model yang frekuensi keringnya paling dekat pengamatan, abu = pembanding.", kes_o)
     # kabupaten/kota
     if len(rk):
         dk = rk["p_kering"] - rk["kering_model_pct"]; arah_k = "semuanya naik" if (dk > 0).all() else "semuanya turun" if (dk < 0).all() else "arahnya campuran"
@@ -595,7 +606,7 @@ def halaman_laporan():
     st.markdown("**Cara membaca keempat kartu angka**")
     for k_ in ("k_sel", "k_model", "k_lalu", "k_yak"): st.markdown(f"*{TP[k_][0].replace('Kartu: ', '').capitalize()}*"); cara2(k_)
     gagal = [c[1] for c in cek if not c[2]]
-    st.markdown(f'**Keyakinan: {yak}** ({n_ok} dari 6 syarat terpenuhi).' + (" Yang belum terpenuhi: " + "; ".join(g[0].lower() + g[1:] for g in gagal) + "." if gagal else ""))
+    st.markdown(f'**Syarat terpenuhi: {yak}** (daftar periksa, bukan skor statistik).' + (" Yang belum terpenuhi: " + "; ".join(g[0].lower() + g[1:] for g in gagal) + "." if gagal else ""))
     st.caption("Angka mutlak model melebihkan frekuensi bulan kering, jadi yang dibaca adalah selisih terhadap masa lalu menurut model yang sama. Ini gambaran kecenderungan, bukan ramalan cuaca.")
 
     st.markdown("## 2. Latar dan tujuan")
@@ -617,7 +628,7 @@ def halaman_laporan():
     kotak_html('<div class="l">Data model</div><div class="t"><div style="flex:40;background:#2f6f8f">1981-2020 · latih dan seleksi (CV blok-tahun)</div><div style="flex:5;background:#e0912b;font-size:9px">2021-25</div><div style="flex:25;background:#2a9d8f">2026-2050 · proyeksi</div></div>'
                '<div class="yr"><span style="flex:40">1981</span><span style="flex:5">2021</span><span style="flex:25">2026 – 2050</span></div><div class="l">Pembanding</div><div class="t"><div style="flex:30;background:#8d99a6">1981-2010 · masa lalu (baseline)</div><div style="flex:40;background:transparent"></div></div>', 132)
     cara("Hold-out 2021-2025 (kuning) dikunci: tidak dipakai untuk tuning, memilih model, maupun menyetel ambang; dievaluasi satu kali setelah semua keputusan dikunci.")
-    st.markdown("- **Tuning adil:** keempat model dituning dengan data, lipatan validasi, skor, dan anggaran pencarian yang sama.\n- **Pemilihan model:** model dengan CRPS terkecil pada validasi sefase (Tingkat 1) di antara empat model; ini berarti *terbaik di antara empat*, bukan *terbukti lebih baik dari klimatologi*.\n"
+    st.markdown("- **Tuning adil:** keempat model dituning dengan data, lipatan validasi, skor, dan anggaran pencarian yang sama.\n- **Pemilihan model:** model dengan peringkat gabungan terbaik (CRPS Tingkat 1, QQ Tingkat 2, dan frekuensi bulan kering Tingkat 2) di antara model yang lebih baik daripada klimatologi pada Tingkat 1; ini berarti *terbaik di antara beberapa model*, bukan *terbukti lebih baik dari klimatologi*.\n"
                 "- **Dua tingkat validasi:** Tingkat 1 (data pengamatan sefase) menilai skill sebenarnya; Tingkat 2 (prediktor GCM, tidak sefase) hanya bisa menilai sebaran.\n- **SPI** dihitung dari simulasi hujan bulanan; bulan dianggap kering bila SPI ≤ -1.")
 
     st.markdown("## 5. Validasi")
@@ -634,7 +645,7 @@ def halaman_laporan():
         for c_ in (1, 3): fig.add_hline(y=0, line_color="#555", line_width=1, row=1, col=c_)
         fig.update_annotations(font_size=10); fig.update_xaxes(tickfont=dict(size=9)); gambar(fig, 270)
         cara("Kiri: skill pada data nyata sefase (CRPSS > 0 = lebih baik daripada klimatologi). Tengah: pada prediktor GCM, selisih frekuensi bulan kering terhadap pengamatan (garis putus = ±3 poin); biru = model dipakai, ungu = paling dekat pengamatan. Kanan: konsistensi per tahun hold-out.")
-        st.markdown(f"- Hold-out 2021-2025: CRPSS **{n(ho['crpss_t1'], 3, True)}** untuk {UTAMA or 'model terpilih'}, positif di **{ho['tahun_positif']} dari {ho['n_tahun']}** tahun. Hanya 5 tahun, jadi dibaca sebagai pemeriksaan arah, bukan bukti.\n"
+        st.markdown(f"- Hold-out 2021-2025: CRPSS **{n(ho['crpss_t1'], 3, True)}** untuk {UTAMA or 'model terpilih'}, positif di **{ho['tahun_positif']} dari {ho['n_tahun']}** tahun. Data ini sudah dilihat berulang selama pengembangan, jadi bukan uji independen. Hanya 5 tahun, jadi dibaca sebagai pemeriksaan arah, bukan bukti.\n"
                     "- Skill sefase **tidak otomatis terbawa** ke prediktor GCM: model yang paling terampil pada data nyata belum tentu paling cocok pada prediktor GCM. Karena itu hasil dibaca sebagai selisih terhadap baseline model sendiri.")
     else: st.info("Hasil validasi hold-out tidak tersedia pada berkas data ini.")
 
@@ -683,7 +694,7 @@ def halaman_laporan():
                 f"- **Horizon dibatasi {H1}:** setelah itu prediktor semakin keluar dari rentang yang dipelajari model.\n- **Resolusi semu:** pola antar-grid lebih banyak berasal dari klimatologi pengamatan daripada sinyal GCM.\n- **Pergeseran musiman** adalah indikasi dari satu model dan belum diuji kebermaknaannya.")
     st.markdown("## 8. Kesimpulan dan saran")
     ksp = {"sama": "belum ada perubahan frekuensi bulan kering yang dapat dipastikan; selisih yang tampak masih dalam naik-turun alami", "lebih": "bulan kering diproyeksikan lebih sering", "kurang": "bulan kering diproyeksikan lebih jarang", "sedikit": "data terlalu sedikit untuk disimpulkan"}[kode]
-    st.markdown(f"**Kesimpulan:** untuk Banten {H0}-{H1} (skala {sk}, {NAMA_SKALA.get(sk, sk).replace('bln', 'bulan')}), {ksp}. Keyakinan {yak.lower()}" + (f"; keempat model statistik tidak sepakat arahnya ({n(min(sm.values()), 0, True)} sampai {n(max(sm.values()), 0, True)} bulan per 100)." if sm and am["n_s"] < am["N"] else ".")
+    st.markdown(f"**Kesimpulan:** untuk Banten {H0}-{H1} (skala {sk}, {NAMA_SKALA.get(sk, sk).replace('bln', 'bulan')}), {ksp}. Syarat terpenuhi {yak} (daftar periksa)" + (f"; model statistik tidak sepakat arahnya ({n(min(sm.values()), 0, True)} sampai {n(max(sm.values()), 0, True)} bulan per 100)." if sm and am["n_s"] < am["N"] else ".")
                 + (f" Ada indikasi pergeseran musim (▲ {', '.join(naik)}{'; ▼ ' + ', '.join(turun) if turun else ''}) yang perlu diuji lebih lanjut." if naik or turun else ""))
     st.markdown("**Saran tindak lanjut**\n1. Bandingkan sebaran frekuensi bulan kering tahunan CHIRPS 1981-2025 dengan model untuk memeriksa apakah ayunan antar-tahun wajar.\n2. Periksa SPI model per grid terhadap baseline sendiri dan buat peta bias baseline.\n"
                 "3. Tambahkan pembanding sederhana (delta change atau QDM) sebagai jangkar.\n4. Tambahkan GCM dan skenario lain agar ketidakpastian model iklim ikut tercakup.\n5. Uji kebermaknaan pergeseran musiman sebelum dipakai untuk keputusan.\n6. Bandingkan target ERA5 dengan CHIRPS, dan hitung ulang ambang naik-turun alami dengan lebih banyak anggota ensemble.")
@@ -731,3 +742,18 @@ with col_c:
     if len(sm) >= 2: gambar(fig_model(sm, compact=True, amb=R["amb"]), H_KECIL, judul=("Per model · ★ = dipakai · area abu = naik-turun alami" if len(R["bulan"]) == 12 else "Per model · seluruh bulan (tak ikut musim) · ★ = dipakai"))
     else: st.caption("Data perbandingan model belum ada.")
 st.markdown(f'<div class="foot">{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca · pola kotak peta mengikuti sel GCM yang kasar · uji beda nyata: {"formal (notebook, block bootstrap)" if R.get("uji") == "resmi" else "pendekatan cepat (rentang tahun bukan seluruh horizon)"}{" · " + PEMBUAT if PEMBUAT else ""}</div>', unsafe_allow_html=True)
+
+
+# ---- v25: panel "Seberapa bisa dipercaya?" (angka dibaca dari meta; tidak dihitung ulang) ----
+V_ = meta.get("validasi") or {}
+if V_ and not LAPORAN:
+    with st.expander("Seberapa bisa dipercaya? (validasi dan keterbatasan)"):
+        def _v(k, d=3, plus=True):
+            x = V_.get(k); return n(x, d, plus) if isinstance(x, (int, float)) else "-"
+        st.markdown(
+            f"- **Skill yang terbukti (prediktor ERA5, {V_.get('model', 'model dipakai')}):** CRPSS rolling-origin **{_v('crpss_t1_rolling')}**, CV blok-tahun {_v('crpss_t1_cv')}, hold-out 2021-2025 {_v('crpss_t1_holdout')} (hold-out = {V_.get('holdout_status', 'data pengembangan')}). Di atas 0 = lebih baik daripada klimatologi.\n"
+            f"- **Setelah diberi prediktor GCM (yang dipakai untuk proyeksi):** CRPSS {_v('crpss_t2_oof')} (klimatologi stokastik {_v('crpss_t2_klim_stokastik')}). Skill di atas **tidak otomatis terbawa** ke hasil proyeksi.\n"
+            f"- **Bulan kering SPI-3 pada 1981-2020:** model {_v('kering_t2_pct', 1, False)} vs pengamatan {_v('kering_obs_pct', 1, False)} dari 100 bulan, sebab itu angka mutlak tidak ditampilkan. SPI-12 terlalu lebar: SD {_v('spi12_sd_t2', 2, False)} vs {_v('spi12_sd_obs', 2, False)}.\n"
+            f"- **Arah perubahan:** {meta.get('klaim_arah_teks', 'belum dihitung')}\n"
+            f"- **Horizon sampai {H1}:** setelah itu lebih dari 20% baris prediktor GCM berada di luar rentang ERA5, sehingga hasilnya bukan lagi interpolasi.\n"
+            f"- **Resolusi:** pola 5 km berasal dari klimatologi CHIRPS dan hanya {V_.get('n_sel_gcm', 4)} sel GCM; baca sebagai kecenderungan wilayah, bukan detail kotak.")
