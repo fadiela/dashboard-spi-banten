@@ -1,18 +1,26 @@
-"""Dashboard proyeksi bulan kering Banten 2026-2050.
-  streamlit run app_dashboard_spi.py
-Tampilan:  (biasa) dashboard satu layar  |  ?laporan=1 laporan naratif siap cetak PDF (berisi juga heatmap dan deret SPI)
-Uji beda nyata: bila dashboard_uji.csv (notebook 14j) ada dan rentang tahun = seluruh horizon, dipakai uji formal (block bootstrap); selain itu pendekatan cepat 2 x galat baku.
-Tambahan URL: ?embed=true (tanpa header/footer Streamlit)  |  ?tinggi=200 (paksa tinggi grafik kecil, px)  |  ?vh=900&vw=1600 (paksa ukuran jendela)
-Ukuran layar: komponen ukuran_layar/ melaporkan tinggi dan lebar jendela, sehingga grafik dan huruf menyesuaikan diri (termasuk layar penuh).
-Berkas data (ekspor notebook 14d-14i) di folder yang sama, atau tunjuk lewat variabel lingkungan HASIL_DIR.
-"""
-import json, math, os
-import numpy as np, pandas as pd, streamlit as st
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import streamlit.components.v1 as components
+"""Halaman 3: Proyeksi bulan kering (SPI) Banten 2026-2050 (Gemala Aleida Fitri).
 
-# ------------------------------------------------------------------ pengaturan yang boleh diubah
+Dijalankan oleh app.py (cangkang) lewat runpy dengan EMBED=True dan DATA_DIR=data_dashboard/. Header, tema/CSS, dan pilihan halaman ada di app.py dan tema.py.
+Bisa juga dijalankan sendiri: streamlit run app_dashboard_spi.py (data di folder yang sama atau lewat HASIL_DIR; warna bawaan sama dengan tema.py).
+Data   : ekspor notebook (sel 14d-14j): dashboard_*.csv/.gz/.json dan banten_kabkota.geojson.
+Tampilan (mode mandiri): (biasa) dashboard satu layar  |  ?laporan=1 laporan naratif siap cetak PDF (berisi juga heatmap dan deret SPI)
+URL tambahan (mode mandiri): ?embed=true (tanpa header/footer Streamlit)  |  ?tinggi=200 (paksa tinggi grafik kecil, px)  |  ?vh=900&vw=1600 (paksa ukuran jendela)
+Ukuran layar: komponen ukuran_layar/ melaporkan tinggi dan lebar jendela, sehingga grafik dan huruf menyesuaikan diri (termasuk layar penuh).
+Uji beda nyata: bila dashboard_uji.csv (notebook 14j) ada dan rentang tahun = seluruh horizon, dipakai uji formal (block bootstrap); selain itu pendekatan cepat 2 x galat baku.
+Warna SPI: kelas dan warna mengikuti legenda peta SPI BMKG (SPI_KELAS di bawah).
+"""
+import json
+import math
+import os
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+import streamlit.components.v1 as components
+from plotly.subplots import make_subplots
+
+# ------------------------------------------------------------------ pengaturan (boleh diubah)
 PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   # kosongkan bila tak perlu
 JUDUL_PROYEK = "Downscaling GCM Hujan untuk Proyeksi Kekeringan (SPI) di Banten"   # ganti dengan judul proyekmu
 H_KPI = 98                          # tinggi blok kartu angka (px)
@@ -28,6 +36,12 @@ EMBED = bool(globals().get("EMBED", False))
 if not EMBED: st.set_page_config(page_title="Bulan kering Banten 2026-2050", page_icon="🌧️", layout="wide", initial_sidebar_state="collapsed")
 def _param(k): return str(st.query_params.get(k, "")).lower() in ("1", "true", "ya")
 LAPORAN = False if EMBED else _param("laporan")
+
+try:
+    from tema import BLN, BLUE, BLUE_LINE, FONT, GRID, INK, INK2, ORANGE, TEAL, ZERO  # noqa: E402  (warna dan huruf satu sumber dengan halaman lain)
+except ImportError:      # mode mandiri tanpa tema.py: nilai sama dengan tema.py
+    BLUE, ORANGE, TEAL, BLUE_LINE, GRID, INK, INK2, ZERO = "#1f6fb5", "#e8710a", "#0f8b8d", "#9db4cc", "#e6ebf1", "#10243b", "#44566c", "#8793a3"
+    BLN, FONT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"], "Poppins, 'Segoe UI', sans-serif"
 
 
 def _angka(k, d, lo, hi):
@@ -68,40 +82,40 @@ div[data-testid="stWidgetLabel"] {min-height:0; margin-bottom:0;}
 </style>"""
 CSS_DASH = """<style>
 html {font-size: clamp(14px, 1.1vw, 21px);}
-.stApp {background:#f3f5f8;}
+.stApp {background:#eef2f7;}
 @page {size: A4 landscape; margin: 6mm;}
 .block-container {padding:.45rem .8rem .2rem; max-width:100%;}
 [data-testid="stVerticalBlock"] {gap:.3rem;}
 div[data-baseweb="select"] > div {min-height:30px;}
 [data-testid="stColumn"] {min-width:0;}
-.ttl {font-size:clamp(.95rem, 1.2vw, 1.3rem); font-weight:700; color:#1d2b3a; line-height:1.15; white-space:normal; overflow-wrap:anywhere;}
-.sub {font-size:.72rem; color:#6b7785; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-div[data-testid="stWidgetLabel"] p {font-size:.65rem !important; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; margin:0 !important;}
+.ttl {font-size:clamp(.95rem, 1.2vw, 1.3rem); font-weight:700; color:#10243b; line-height:1.15; white-space:normal; overflow-wrap:anywhere;}
+.sub {font-size:.72rem; color:#5b6b7f; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+div[data-testid="stWidgetLabel"] p {font-size:.65rem !important; font-weight:700; color:#5b6b7f; text-transform:uppercase; letter-spacing:.04em; margin:0 !important;}
 .ttl, .sub, .foot {margin-bottom:0 !important;}
-.foot {font-size:.68rem; color:#8794a3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.verd {background:#fff; border:1px solid #e1e5ea; border-left:6px solid var(--c); border-radius:6px; padding:.3rem .7rem; font-size:.95rem; line-height:1.3; color:#1d2b3a;}
-.verd small {display:block; font-size:.74rem; color:#55606e; margin-top:.08rem;}
-.pan {background:#fff; border:1px solid #e1e5ea; border-left:4px solid #2f6f8f; border-radius:6px; padding:.4rem .65rem; margin-bottom:.4rem; font-size:.76rem; line-height:1.38; color:#33404d;}
-.pan h4 {font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; color:#1d2b3a; margin:0 0 .15rem; padding:0;}
-.pan .kes {background:#eef5f9; border-radius:4px; padding:.2rem .4rem; margin-top:.2rem; color:#1d2b3a;}
+.foot {font-size:.68rem; color:#8793a3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.verd {background:#fff; border:1px solid #dde4ec; border-left:6px solid var(--c); border-radius:6px; padding:.3rem .7rem; font-size:.95rem; line-height:1.3; color:#10243b;}
+.verd small {display:block; font-size:.74rem; color:#44566c; margin-top:.08rem;}
+.pan {background:#fff; border:1px solid #dde4ec; border-left:4px solid #1f6fb5; border-radius:6px; padding:.4rem .65rem; margin-bottom:.4rem; font-size:.76rem; line-height:1.38; color:#44566c;}
+.pan h4 {font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; color:#10243b; margin:0 0 .15rem; padding:0;}
+.pan .kes {background:#eef2f7; border-radius:4px; padding:.2rem .4rem; margin-top:.2rem; color:#10243b;}
 </style>"""
 CSS_LAP = """<style>
 html {font-size: __UT__px;}
 .stApp {background:#fff;}
 @page {size: A4 portrait; margin: 14mm;}
 .block-container {max-width:920px; padding:1.2rem 1rem 2rem;}
-h2 {color:#1d2b3a; border-bottom:2px solid #2f6f8f; padding-bottom:.25rem; margin-top:1.3rem !important;}
-h3 {color:#2f6f8f;}
-.judul {font-size:1.7rem; font-weight:800; color:#1d2b3a; line-height:1.2;}
-.sublap {font-size:.85rem; color:#6b7785; margin-bottom:.6rem;}
-.cara {font-size:.8rem; color:#55606e; background:#f3f5f8; border-left:4px solid #2f6f8f; padding:.35rem .7rem; border-radius:4px; margin:.1rem 0 .6rem;}
-.kes {font-size:.88rem; color:#1d2b3a; background:#e8f1f6; border-left:4px solid #2a9d8f; padding:.4rem .7rem; border-radius:4px; margin:.1rem 0 .8rem;}
-.jawab {font-size:1.1rem; background:#e8f1f6; border-left:6px solid #2f6f8f; border-radius:6px; padding:.7rem 1rem; line-height:1.5;}
+h2 {color:#10243b; border-bottom:2px solid #1f6fb5; padding-bottom:.25rem; margin-top:1.3rem !important;}
+h3 {color:#1f6fb5;}
+.judul {font-size:1.7rem; font-weight:800; color:#10243b; line-height:1.2;}
+.sublap {font-size:.85rem; color:#5b6b7f; margin-bottom:.6rem;}
+.cara {font-size:.8rem; color:#44566c; background:#eef2f7; border-left:4px solid #1f6fb5; padding:.35rem .7rem; border-radius:4px; margin:.1rem 0 .6rem;}
+.kes {font-size:.88rem; color:#10243b; background:#dbe8f5; border-left:4px solid #0f8b8d; padding:.4rem .7rem; border-radius:4px; margin:.1rem 0 .8rem;}
+.jawab {font-size:1.1rem; background:#dbe8f5; border-left:6px solid #1f6fb5; border-radius:6px; padding:.7rem 1rem; line-height:1.5;}
 </style>"""
 if not EMBED: st.markdown((CSS_UMUM + (CSS_LAP if LAPORAN else CSS_DASH)).replace("__UT__", str(UKURAN_TEKS_LAPORAN if LAPORAN else UKURAN_TEKS)), unsafe_allow_html=True)
 
-PROY, BASE, ABU = "#2f6f8f", "#4a5563", "#b9c2cc"      # biru = proyeksi, abu tua = masa lalu model
-TRANSF = "#8a5fb0"                                       # ungu = model yang frekuensinya paling dekat pengamatan
+PROY, BASE, ABU = BLUE, INK2, BLUE_LINE      # biru = proyeksi, abu tua = masa lalu model, abu muda = pembanding
+TRANSF = TEAL                                # hijau-biru = model yang frekuensinya paling dekat pengamatan
 # Palet kelas SPI mengikuti legenda BMKG (Indeks Presipitasi Terstandardisasi 1 bulanan)
 SPI_KELAS = [(-99, -2.0, "Sangat kering", "#710201"), (-2.0, -1.5, "Kering", "#e60000"), (-1.5, -1.0, "Agak kering", "#e59901"), (-1.0, 1.0, "Normal", "#feffbe"),
              (1.0, 1.5, "Agak basah", "#99e702"), (1.5, 2.0, "Basah", "#37a800"), (2.0, 99, "Sangat basah", "#00a8e5")]
@@ -118,12 +132,11 @@ def spi_warna(v):
     return SPI_KELAS[6][3]
 
 
-ABU_N = "#c3cad3"                               # ABU_N = belum beda nyata
+ABU_N = "#c5d3e2"                               # ABU_N = belum beda nyata
 MERAH, BIRU = "#e60000", "#37a800"              # merah BMKG = lebih sering kering, hijau BMKG = lebih jarang kering (lebih basah)
-WARNA_CHIP = {"red": "#d1495b", "blue": "#2a6f97", "gray": "#8d99a6", "amber": "#e0912b", "green": "#2a9d8f"}
+WARNA_CHIP = {"red": MERAH, "blue": BLUE, "gray": ZERO, "amber": ORANGE, "green": TEAL}
 KERING = [[0, "#feffbe"], [0.33, "#e59901"], [0.66, "#e60000"], [1, "#710201"]]                    # persen bulan kering: normal (kuning pucat) -> agak kering -> kering -> sangat kering
 SELISIH = [[0, "#37a800"], [0.25, "#99e702"], [0.5, "#feffbe"], [0.75, "#e59901"], [1, "#e60000"]]     # selisih / bias: hijau = lebih jarang kering, merah = lebih sering kering
-BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 PRESET = {"Sepanjang tahun": list(range(1, 13)), "Des-Feb": [12, 1, 2], "Mar-Mei": [3, 4, 5], "Jun-Agu": [6, 7, 8], "Sep-Nov": [9, 10, 11]}
 NAMA_SKALA = {"SPI-3": "3 bln", "SPI-6": "6 bln", "SPI-12": "12 bln"}
 NAMA_SKALA_PANJANG = {"SPI-3": "3 bulan (jangka pendek)", "SPI-6": "6 bulan (satu musim)", "SPI-12": "12 bulan (satu tahun)"}
@@ -178,7 +191,7 @@ def tafsir(sel, se):
     return "sama" if abs(sel) < 2 * se else ("lebih" if sel > 0 else "kurang")
 
 
-# ------------------------------------------------------------------ peta (pembantu)
+# ------------------------------------------------------------------ peta
 def _dalam(px, py, ring):
     x, y = ring[:, 0], ring[:, 1]; d = np.zeros(px.shape, bool)
     for xi, yi, xj, yj in zip(x, y, np.roll(x, -1), np.roll(y, -1)):
@@ -232,15 +245,15 @@ def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, m
     lay = dict(style=PETA_STYLE, center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom)
     if gj is not None: lay["layers"] = [dict(sourcetype="geojson", source=gj, type="line", color="#33474a", line=dict(width=1.3), below="")]
     fig.update_layout(map=lay)
-    if len(LAB): fig.add_trace(go.Scattermap(lon=LAB["lon"], lat=LAB["lat"], mode="text", text=LAB["nama"], textfont=dict(size=10, color="#1d2b3a"), hoverinfo="skip", showlegend=False))
-    if catatan: fig.add_annotation(text=catatan, xref="paper", yref="paper", x=0.01, y=0.99, xanchor="left", yanchor="top", showarrow=False, align="left", font=dict(size=10.5, color="#33404d"), bgcolor="rgba(255,255,255,.88)", borderpad=3)
+    if len(LAB): fig.add_trace(go.Scattermap(lon=LAB["lon"], lat=LAB["lat"], mode="text", text=LAB["nama"], textfont=dict(size=10, color="#10243b"), hoverinfo="skip", showlegend=False))
+    if catatan: fig.add_annotation(text=catatan, xref="paper", yref="paper", x=0.01, y=0.99, xanchor="left", yanchor="top", showarrow=False, align="left", font=dict(size=10.5, color="#44566c"), bgcolor="rgba(255,255,255,.88)", borderpad=3)
     return fig
 
 
 def gambar(fig, h, judul=None, legenda=False):
-    fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=11, color="#33404d"), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, uniformtext=dict(minsize=9, mode="hide"), legend=dict(orientation="h", y=1.14, x=0, font_size=10))
-    if judul: fig.update_layout(margin=dict(l=2, r=2, t=24, b=2), title=dict(text=judul.upper(), x=0.005, xanchor="left", y=0.99, yanchor="top", font=dict(size=10.5, color="#55606e")))      # judul panel DI DALAM grafik
-    fig.update_xaxes(showgrid=False, linecolor="#c8cfd8"); fig.update_yaxes(gridcolor="#eef1f4", zeroline=False)
+    fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=11, color=INK2, family=FONT), hoverlabel=dict(font_size=11, bgcolor="#fff", font_color=INK), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, uniformtext=dict(minsize=9, mode="hide"), legend=dict(orientation="h", y=1.14, x=0, font_size=10))
+    if judul: fig.update_layout(margin=dict(l=2, r=2, t=24, b=2), title=dict(text=judul.upper(), x=0.005, xanchor="left", y=0.99, yanchor="top", font=dict(size=10.5, color=INK2)))      # judul panel DI DALAM grafik
+    fig.update_xaxes(showgrid=False, linecolor=GRID); fig.update_yaxes(gridcolor=GRID, zeroline=False)
     if FSKALA > 1.01:      # layar lebar: perbesar huruf grafik (sumbu, label batang, judul, catatan)
         fs = lambda v: round(v * FSKALA, 1); fig.update_layout(font_size=fs(11)); fig.update_xaxes(tickfont_size=fs(10)); fig.update_yaxes(tickfont_size=fs(10))
         for tr in fig.data:
@@ -357,20 +370,20 @@ def keyakinan(R, am):
 
 
 KPI_CSS = """<style>
-body {margin:0; padding:2px 1px 0; zoom:__Z__; background:__BG__; font-family:"Segoe UI", Arial, sans-serif; color:#1d2b3a; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+body {margin:0; padding:2px 1px 0; zoom:__Z__; background:__BG__; font-family:"Poppins", "Segoe UI", Arial, sans-serif; color:#10243b; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
 .kpi {display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px;}
-.tile {background:#fff; border:1px solid #e1e5ea; border-top:3px solid var(--c); border-radius:7px; padding:5px 10px 6px; height:88px; box-sizing:border-box; overflow:hidden;}
-.k {font-size:10.5px; font-weight:700; color:#6b7785; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.tile {background:#fff; border:1px solid #dde4ec; border-top:3px solid var(--c); border-radius:7px; padding:5px 10px 6px; height:88px; box-sizing:border-box; overflow:hidden;}
+.k {font-size:10.5px; font-weight:700; color:#5b6b7f; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .v {font-size:23px; font-weight:700; line-height:1.15; white-space:nowrap;}
-.v small {font-size:11px; font-weight:500; color:#6b7785;}
-.s {font-size:11px; color:#6b7785; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.v small {font-size:11px; font-weight:500; color:#5b6b7f;}
+.s {font-size:11px; color:#5b6b7f; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .chip {max-width:100%; overflow:hidden; text-overflow:ellipsis; vertical-align:top; display:inline-block; padding:0 8px; border-radius:9px; font-size:10px; font-weight:700; color:#fff; margin-top:2px; white-space:nowrap;}
-.red {background:#d1495b;} .blue {background:#2a6f97;} .gray {background:#8d99a6;} .amber {background:#e0912b;} .green {background:#2a9d8f;}
-.verd {background:#fff; border:1px solid #e1e5ea; border-left:6px solid var(--c); border-radius:6px; padding:5px 10px; font-size:14px; line-height:1.3; margin:0 1px 7px;}
-.verd small {display:block; font-size:11px; color:#55606e; margin-top:2px; line-height:1.3;}
-.dot {display:inline-block; width:11px; height:11px; border-radius:50%; margin:0 2px 0 0; vertical-align:middle; background:#d9dee4;} .dot.ok {background:#2a9d8f;} .dot.no {background:#e0912b;}
+.red {background:#e60000;} .blue {background:#1f6fb5;} .gray {background:#8793a3;} .amber {background:#e8710a;} .green {background:#0f8b8d;}
+.verd {background:#fff; border:1px solid #dde4ec; border-left:6px solid var(--c); border-radius:6px; padding:5px 10px; font-size:14px; line-height:1.3; margin:0 1px 7px;}
+.verd small {display:block; font-size:11px; color:#44566c; margin-top:2px; line-height:1.3;}
+.dot {display:inline-block; width:11px; height:11px; border-radius:50%; margin:0 2px 0 0; vertical-align:middle; background:#d9dee4;} .dot.ok {background:#0f8b8d;} .dot.no {background:#e8710a;}
 .insrow {margin-top:7px; white-space:nowrap; overflow:hidden;}
-.ins {display:inline-block; font-size:11px; color:#33404d; background:#fff; border:1px solid #e1e5ea; border-radius:12px; padding:1px 9px 1px 7px; margin:0 5px 0 0;}
+.ins {display:inline-block; font-size:11px; color:#44566c; background:#fff; border:1px solid #dde4ec; border-radius:12px; padding:1px 9px 1px 7px; margin:0 5px 0 0;}
 .ins i {display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px;}
 </style>"""
 
@@ -378,7 +391,7 @@ body {margin:0; padding:2px 1px 0; zoom:__Z__; background:__BG__; font-family:"S
 PENDEK = {"Model terbaik": "model terbaik", "Uji rolling-origin": "uji rolling-origin", "Uji 2021-25": "uji 2021-25", "Arah GCM": "arah GCM", "Input di luar rentang": "input di luar rentang", "Bias model": "bias model", "Model searah": "model searah"}
 
 
-def kartu_html(R, sm, chips=False, bg="#f3f5f8", atas="", zoom=1.0):
+def kartu_html(R, sm, chips=False, bg="#eef2f7", atas="", zoom=1.0):
     """Empat kartu: (1) selisih, (2) rentang 4 model, (3) ketepatan masa lalu model, (4) keyakinan (6 titik = 6 syarat). Angka mutlak proyeksi tidak ditampilkan."""
     am = arah_model(sm); cek, n_ok, yak, yak_c = keyakinan(R, am); kode = R["kode"]
     def tile(k, v, kecil, s_, chip, cls, warna, tip=""): return f'<div class="tile" style="--c:{warna}" title="{tip}"><div class="k">{k}</div><div class="v">{v} <small>{kecil}</small></div><div class="s">{s_}</div><span class="chip {cls}">{chip}</span></div>'
@@ -400,7 +413,7 @@ def kartu_html(R, sm, chips=False, bg="#f3f5f8", atas="", zoom=1.0):
          tile("Masa lalu 1981-2010", f'{n(R["base"], 0)} vs {n(R["ref"], 0)}', "model vs nyata", "bulan kering per 100 bulan", b_chip, b_cls, WARNA_CHIP[b_cls], "Model dibandingkan pengamatan CHIRPS pada periode yang sama. Bila beda jauh, baca selisih, bukan angka mutlak."),
          tile("Syarat terpenuhi", f'{yak} {titik}', "", ("belum: " + ", ".join(PENDEK.get(g, g) for g in gagal)) if gagal else "semua syarat terpenuhi", f"{n_ok} DARI 6 SYARAT TERPENUHI", yak_c, WARNA_CHIP[yak_c], tip_y)]
     dm = R["dbulan"]; ny = R["bulan_nyata"].reindex(dm.index).fillna(False)
-    naik = [BULAN[m - 1] for m, v in dm.items() if v >= 3 and ny[m]]; turun = [BULAN[m - 1] for m, v in dm.items() if v <= -3 and ny[m]]
+    naik = [BLN[m - 1] for m, v in dm.items() if v >= 3 and ny[m]]; turun = [BLN[m - 1] for m, v in dm.items() if v <= -3 and ny[m]]
     html = KPI_CSS.replace("__BG__", bg).replace("__Z__", str(round(zoom, 3))) + atas + '<div class="kpi">' + "".join(T) + "</div>"
     return html, cek, n_ok, yak, yak_c, am, naik, turun
 
@@ -423,7 +436,7 @@ def banner(R, sm, am):
     return f'<div class="verd" style="--c:{WARNA_CHIP[WARNA_KODE[kode]]}">{utama}<small>{cat}</small></div>', WARNA_CHIP[WARNA_KODE[kode]]
 
 
-# ------------------------------------------------------------------ pembangun grafik
+# ------------------------------------------------------------------ grafik
 def tren_tahun(yr):
     """Kemiringan linear per dekade dan galat bakunya (kasar: mengabaikan autokorelasi antar-tahun)."""
     x, y = yr.index.to_numpy(float), yr.to_numpy(float)
@@ -435,7 +448,7 @@ def tren_tahun(yr):
 def fig_tahun(R):
     """Batang = % bulan kering tiap tahun (satu realisasi, bukan ramalan); garis tebal = rata-rata bergulir 5 tahun; putus = masa lalu model."""
     yr = R["per_th"]; x = yr.index.astype(int); mv = yr.rolling(5, center=True, min_periods=3).mean()
-    fig = go.Figure(); fig.add_trace(go.Bar(x=x, y=yr.values, marker_color="rgba(47,111,143,.38)", hovertemplate="%{x}<br>%{y:.0f} dari 100 bulan kering<extra></extra>"))
+    fig = go.Figure(); fig.add_trace(go.Bar(x=x, y=yr.values, marker_color="rgba(31,111,181,.38)", hovertemplate="%{x}<br>%{y:.0f} dari 100 bulan kering<extra></extra>"))
     fig.add_trace(go.Scatter(x=x, y=mv.values, mode="lines", line=dict(color=PROY, width=3.2), hovertemplate="%{x}: rata-rata 5 tahun %{y:.1f}<extra></extra>"))
     fig.add_hline(y=R["base"], line_dash="dot", line_color=BASE, line_width=2.5)
     fig.update_layout(bargap=0.22, yaxis_range=[0, max(float(yr.max()), R["base"]) * 1.12]); fig.update_xaxes(dtick=5, tickfont=dict(size=10)); return fig
@@ -445,7 +458,7 @@ def fig_bulan(R):
     """Merah/hijau = selisih bulan itu beda nyata (>= 2 x galat baku antar-tahun); abu = belum pasti; pudar = di luar musim terpilih."""
     d = R["dbulan"]; ny = R["bulan_nyata"].reindex(d.index).fillna(False).astype(bool); pilih_ = [m in R["bulan"] for m in d.index]
     warna = [(MERAH if v > 0 else BIRU) if nn else ABU_N for v, nn in zip(d.values, ny.values)]
-    fig = go.Figure(go.Bar(x=[BULAN[m - 1] for m in d.index], y=d.values, marker=dict(color=warna, opacity=[1 if p else 0.4 for p in pilih_]), customdata=np.where(ny.values, "beda nyata", "belum pasti"),
+    fig = go.Figure(go.Bar(x=[BLN[m - 1] for m in d.index], y=d.values, marker=dict(color=warna, opacity=[1 if p else 0.4 for p in pilih_]), customdata=np.where(ny.values, "beda nyata", "belum pasti"),
                            hovertemplate="%{x}<br>selisih %{y:+.1f} bulan per 100 (%{customdata})<extra></extra>"))
     fig.add_hline(y=0, line_color="#555", line_width=1); fig.update_xaxes(tickfont=dict(size=10)); return fig
 
@@ -456,7 +469,7 @@ def fig_model(sm, compact=False, amb=None):
     else: lab = [m_ + ("<br>(dipakai)" if m_ == UTAMA else "<br>(dekat pengamatan)" if m_ == TRANSFER else "") for m_ in urut]; warna = [PROY if m_ == UTAMA else TRANSF if m_ == TRANSFER else ABU for m_ in urut]
     span = max(max(v) - min(v), a_, 1)
     fig = go.Figure(go.Bar(y=lab, x=v, orientation="h", marker_color=warna, text=[n(x, 1, True) for x in v], textposition="outside", textfont_size=10, cliponaxis=False, hovertemplate="%{y}<br>%{x:+.1f} bulan per 100<extra></extra>"))
-    if a_ > 0: fig.add_vrect(x0=-a_, x1=a_, fillcolor="#8d99a6", opacity=0.15, line_width=0, layer="below")      # area abu = naik-turun alami
+    if a_ > 0: fig.add_vrect(x0=-a_, x1=a_, fillcolor="#8793a3", opacity=0.15, line_width=0, layer="below")      # area abu = naik-turun alami
     fig.add_vline(x=0, line_color="#555", line_width=1.2)
     fig.update_xaxes(zeroline=False, range=[min(min(v), -a_, 0) - 0.22 * span, max(max(v), a_, 0) + 0.25 * span]); fig.update_yaxes(type="category", tickfont=dict(size=10), automargin=True); return fig
 
@@ -466,7 +479,7 @@ def fig_kab(R):
     rk = R["rk"]; d = (rk["p_kering"] - rk["kering_model_pct"]).sort_values(); a_ = float(R["amb"]) if np.isfinite(R["amb"]) else 0.0
     warna = [(MERAH if v > 0 else BIRU) if (a_ > 0 and abs(v) >= a_) else ABU_N for v in d]
     fig = go.Figure(go.Bar(y=list(d.index), x=d.values, orientation="h", marker_color=warna, text=[n(v, 1, True) for v in d], textposition="outside", textfont_size=10, cliponaxis=False, hovertemplate="%{y}<br>selisih %{x:+.1f} bulan per 100<extra></extra>"))
-    if a_ > 0: fig.add_vrect(x0=-a_, x1=a_, fillcolor="#8d99a6", opacity=0.15, line_width=0, layer="below")
+    if a_ > 0: fig.add_vrect(x0=-a_, x1=a_, fillcolor="#8793a3", opacity=0.15, line_width=0, layer="below")
     fig.add_vline(x=0, line_color="#555", line_width=1.2); lim = max(a_ * 1.15, float(d.abs().max()) * 1.4, 3.0)
     fig.update_xaxes(range=[-lim, lim]); fig.update_yaxes(type="category", tickmode="array", tickvals=list(d.index), ticktext=list(d.index), automargin=True, tickfont=dict(size=10)); return fig
 
@@ -490,7 +503,6 @@ ISTILAH = ("<b>SPI</b> membandingkan hujan suatu periode dengan hujan biasanya (
 def teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, mode):
     """Kamus {kunci: (judul, cara membaca, kesimpulan)}. Semua angka dihitung dari pilihan aktif."""
     amb, sel, kode, bias = R["amb"], R["sel"], R["kode"], R["base"] - R["ref"]
-    musim_t = "sepanjang tahun" if R["bulan"] == PRESET["Sepanjang tahun"] else "bulan terpilih"
     gagal = [c[1][0].lower() + c[1][1:] for c in cek if not c[2]]
     amb_t = (f"selang 95%: {n(R['ci'][0], 1, True)} s/d {n(R['ci'][1], 1, True)}" if R.get("ci") else f"±{n(amb, 1)}") if np.isfinite(amb) else "(tidak terhitung)"
     KODE_KES = {"sama": f"Selisih {n(sel, 1, True)} lebih kecil daripada batas naik-turun alami ({amb_t}), jadi <b>belum bisa disebut perubahan nyata</b>.",
@@ -501,7 +513,7 @@ def teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, mode):
     am_t = (f"Rentang {n(min(sm.values()), 1, True)} s/d {n(max(sm.values()), 1, True)} bulan per 100. " + ("Semua model searah." if am["N"] >= 2 and am["n_s"] == am["N"] else "Model tidak sepakat arahnya, jadi <b>tanda perubahan bergantung pada model yang dipilih</b>.")) if len(sm) >= 2 else "Data perbandingan model belum ada."
     T["k_sel"] = ("Kartu: selisih", "Proyeksi dikurangi masa lalu model (bulan kering per 100 bulan). Angka ± adalah batas naik-turun alami antar-tahun (2 × galat baku): selisih di bawah batas ini belum bisa dipastikan.", KODE_KES[kode])
     T["k_model"] = ("Kartu: rentang model", "Selisih yang sama dihitung dengan empat model statistik (GLM, Random Forest, XGBoost, Neural Net). Bila rentangnya melewati 0, tanda perubahan bergantung pada model.", am_t)
-    T["k_lalu"] = ("Kartu: masa lalu model vs nyata", f"Dari 100 bulan pada 1981-2010, berapa yang kering menurut model dan menurut pengamatan (CHIRPS). Sebagai acuan, SPI dirancang agar sekitar 16 dari 100 bulan kering.",
+    T["k_lalu"] = ("Kartu: masa lalu model vs nyata", "Dari 100 bulan pada 1981-2010, berapa yang kering menurut model dan menurut pengamatan (CHIRPS). Sebagai acuan, SPI dirancang agar sekitar 16 dari 100 bulan kering.",
                    (f"Model memberi {n(R['base'], 0)} vs {n(R['ref'], 0)} pengamatan: model <b>terlalu kering</b> sekitar {n(bias, 0)} bulan per 100. Karena itu angka mutlak proyeksi tidak ditampilkan; yang dibaca adalah <b>selisih</b> terhadap masa lalu model yang sama." if bias > 3
                     else f"Model memberi {n(R['base'], 0)} vs {n(R['ref'], 0)} pengamatan, cukup dekat." if bias > -3 else f"Model memberi {n(R['base'], 0)} vs {n(R['ref'], 0)} pengamatan: model <b>terlalu basah</b>; baca selisih, bukan angka mutlak."))
     T["k_yak"] = ("Kartu: syarat terpenuhi", f"Enam titik = enam syarat: model terbaik, {UJI_TXT}, arah sejalan hujan GCM, input di luar rentang latih, bias model, dan kesepakatan antar-model. Hijau = terpenuhi, oranye = belum.",
@@ -531,7 +543,7 @@ def teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, mode):
     d = R["dbulan"].dropna()
     if len(d) >= 2:
         top = d.nlargest(2); low = d.idxmin()
-        kes_m = f"{int((d > 0).sum())} dari {len(d)} bulan menunjukkan kenaikan. Terbesar <b>{BULAN[top.index[0] - 1]}</b> ({n(top.iloc[0], 1, True)}) dan <b>{BULAN[top.index[1] - 1]}</b> ({n(top.iloc[1], 1, True)}); terendah {BULAN[low - 1]} ({n(d.min(), 1, True)})."
+        kes_m = f"{int((d > 0).sum())} dari {len(d)} bulan menunjukkan kenaikan. Terbesar <b>{BLN[top.index[0] - 1]}</b> ({n(top.iloc[0], 1, True)}) dan <b>{BLN[top.index[1] - 1]}</b> ({n(top.iloc[1], 1, True)}); terendah {BLN[low - 1]} ({n(d.min(), 1, True)})."
         if set(top.index) <= {8, 9, 10, 11} and int(R["bulan_nyata"].reindex(d.index).fillna(False).sum()) > 0: kes_m += " Kenaikan terkonsentrasi di akhir musim kemarau."
         n_ny = int(R["bulan_nyata"].reindex(d.index).fillna(False).sum()); kes_m += f" Yang beda nyata hanya <b>{n_ny} dari {len(d)} bulan</b>; batang abu = belum pasti, jadi pola musim ini belum bisa dipakai sebagai temuan."
     else: kes_m = "Data bulanan tidak cukup."
@@ -564,7 +576,7 @@ def teks_deret(sk):
     for x in kr: run = run + 1 if x else 0; best = max(best, run)
     mn = s_.loc[s_["spi_median"].idxmin()]
     cara_ = f"Garis biru = SPI bulanan ({sk}) dari median {meta.get('n_anggota_ensemble', 20)} simulasi; pita = sebaran p10-p90 antar-simulasi. Latar berwarna = kelas SPI menurut BMKG (kuning pucat normal; oranye, merah, merah tua = agak kering, kering, sangat kering; hijau sampai biru = basah). Di bawah garis putus-putus (−1) = bulan kering, ditandai titik sesuai kelasnya; titik berurutan = kekeringan berkepanjangan."
-    kes = f"Median simulasi mencapai SPI ≤ −1 pada <b>{int(kr.sum())} dari {len(s_)} bulan</b>; paling kering {BULAN[int(mn['bulan']) - 1]} {int(mn['tahun'])} (SPI {n(mn['spi_median'], 2)}), dan rangkaian terpanjang <b>{best} bulan berturut-turut</b>. Tahun-tahun kering berasal dari variabilitas internal satu simulasi model, bukan ramalan kejadian nyata."
+    kes = f"Median simulasi mencapai SPI ≤ −1 pada <b>{int(kr.sum())} dari {len(s_)} bulan</b>; paling kering {BLN[int(mn['bulan']) - 1]} {int(mn['tahun'])} (SPI {n(mn['spi_median'], 2)}), dan rangkaian terpanjang <b>{best} bulan berturut-turut</b>. Tahun-tahun kering berasal dari variabilitas internal satu simulasi model, bukan ramalan kejadian nyata."
     return cara_, kes
 
 
@@ -573,11 +585,11 @@ def fig_deret(sk, t0=None, t1=None):
     fig = go.Figure()
     for lo, hi, _, w in SPI_KELAS: fig.add_hrect(y0=max(lo, -3.5), y1=min(hi, 3.5), fillcolor=w, opacity=0.30, line_width=0, layer="below")      # pita kelas SPI BMKG
     fig.add_trace(go.Scatter(x=x, y=s_["spi_p90"], line=dict(width=0), hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=x, y=s_["spi_p10"], fill="tonexty", fillcolor="rgba(47,111,143,.22)", line=dict(width=0), name="sebaran antar-simulasi (p10-p90)", hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=x, y=s_["spi_p10"], fill="tonexty", fillcolor="rgba(31,111,181,.22)", line=dict(width=0), name="sebaran antar-simulasi (p10-p90)", hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=x, y=s_["spi_median"], line=dict(color=PROY, width=1.6), name="SPI (median simulasi)", hovertemplate="%{x|%b %Y}<br>SPI %{y:.2f}<extra></extra>"))
     kr = s_["spi_median"] <= -1
     fig.add_trace(go.Scatter(x=x[kr], y=s_.loc[kr, "spi_median"], mode="markers", marker=dict(color=[spi_warna(v) for v in s_.loc[kr, "spi_median"]], size=7, line=dict(color="#4a1a1a", width=0.6)), name="bulan kering (SPI ≤ -1)", hoverinfo="skip"))
-    fig.add_hline(y=-1, line_dash="dash", line_color="#e60000", line_width=1.3); fig.add_hline(y=0, line_color="#8794a3", line_width=1)
+    fig.add_hline(y=-1, line_dash="dash", line_color="#e60000", line_width=1.3); fig.add_hline(y=0, line_color="#8793a3", line_width=1)
     fig.update_yaxes(title_text="SPI", range=[-3.5, 3.5]); return fig
 
 
@@ -590,7 +602,7 @@ def deret_info(sk, t0, t1):
     for i, x in enumerate(kr):
         run = run + 1 if x else 0
         if run > best: best, end = run, i
-    lab = lambda i: f"{BULAN[int(s_.loc[i, 'bulan']) - 1]} {int(s_.loc[i, 'tahun'])}"
+    lab = lambda i: f"{BLN[int(s_.loc[i, 'bulan']) - 1]} {int(s_.loc[i, 'tahun'])}"
     mn = int(s_["spi_median"].idxmin())
     return dict(best=best, a=lab(end - best + 1) if best else "-", b=lab(end) if best else "-", mn=lab(mn), mn_v=float(s_.loc[mn, "spi_median"]), n_k=int(kr.sum()), N=len(s_))
 
@@ -599,22 +611,22 @@ def fig_heat(sk, t0, t1):
     G = D["b_grid"]; G = G[(G["SPI"] == sk) & G["tahun"].between(t0, t1)]
     pv = G.groupby(["bulan", "tahun"])["p_kering"].mean().mul(100).unstack("tahun").reindex(range(1, 13))
     zmax = max(30.0, float(np.ceil(np.nanpercentile(pv.values, 98) / 10) * 10))
-    fig = go.Figure(go.Heatmap(z=pv.values, x=pv.columns, y=[BULAN[m - 1] for m in pv.index], colorscale=KERING, zmin=0, zmax=zmax, xgap=1, ygap=1,
+    fig = go.Figure(go.Heatmap(z=pv.values, x=pv.columns, y=[BLN[m - 1] for m in pv.index], colorscale=KERING, zmin=0, zmax=zmax, xgap=1, ygap=1,
                                colorbar=dict(title=dict(text="% kering", font=dict(size=9), side="top"), thickness=8, len=0.9, tickfont=dict(size=9)), hovertemplate="%{y} %{x}<br>%{z:.0f}% simulasi kering<extra></extra>"))
     fig.update_yaxes(autorange="reversed", tickfont=dict(size=9), gridcolor="white"); fig.update_xaxes(dtick=5, tickfont=dict(size=9)); return fig
 
 
-# ================================================================== LAPORAN (?laporan=1)
+# ------------------------------------------------------------------ laporan (?laporan=1)
 def halaman_baru(): st.markdown('<div style="break-before:page"></div>', unsafe_allow_html=True)
 def cara(t): st.markdown(f'<div class="cara">{t}</div>', unsafe_allow_html=True)
 
 
 def kotak_html(isi, tinggi):
-    iframe('<style>body{margin:0;font-family:"Segoe UI",Arial,sans-serif;color:#1d2b3a;-webkit-print-color-adjust:exact;print-color-adjust:exact}' + """
+    iframe('<style>body{margin:0;font-family:"Poppins","Segoe UI",Arial,sans-serif;color:#10243b;-webkit-print-color-adjust:exact;print-color-adjust:exact}' + """
 .row{display:flex;align-items:stretch;gap:0}.b{flex:1;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.3;text-align:center;display:flex;flex-direction:column;justify-content:center;color:#fff}
-.b small{font-size:10px;opacity:.92}.ar{width:22px;display:flex;align-items:center;justify-content:center;color:#6b7785;font-size:18px}
+.b small{font-size:10px;opacity:.92}.ar{width:22px;display:flex;align-items:center;justify-content:center;color:#5b6b7f;font-size:18px}
 .t{display:flex;height:38px;border-radius:8px;overflow:hidden;margin-top:4px}.t div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden}
-.l{font-size:10px;color:#6b7785;margin:8px 0 2px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.yr{display:flex;font-size:10px;color:#6b7785;margin-top:2px}</style>""" + isi, tinggi)
+.l{font-size:10px;color:#5b6b7f;margin:8px 0 2px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.yr{display:flex;font-size:10px;color:#5b6b7f;margin-top:2px}</style>""" + isi, tinggi)
 
 
 def halaman_laporan():
@@ -643,18 +655,18 @@ def halaman_laporan():
                 "sekaligus menilai seberapa bisa hasil itu dipercaya.")
 
     st.markdown("## 3. Data dan wilayah")
-    st.table(pd.DataFrame([["Apa", f"Frekuensi bulan kering (SPI ≤ -1) pada skala 3, 6, dan 12 bulan."], ["Mengapa", "Gambaran kecenderungan kekeringan untuk perencanaan, bukan prakiraan cuaca."], ["Siapa", PEMBUAT or "-"],
+    st.table(pd.DataFrame([["Apa", "Frekuensi bulan kering (SPI ≤ -1) pada skala 3, 6, dan 12 bulan."], ["Mengapa", "Gambaran kecenderungan kekeringan untuk perencanaan, bukan prakiraan cuaca."], ["Siapa", PEMBUAT or "-"],
                            ["Di mana", "Provinsi Banten, grid sekitar 5 km dan enam kabupaten/kota."], ["Kapan", f"Proyeksi {H0}-{H1}; pembanding 1981-2010; latih/seleksi 1981-2020; hold-out 2021-2025."],
                            ["Data", f"Model iklim {meta.get('gcm')} (skenario {meta.get('skenario')}, satu anggota); hujan pengamatan {meta.get('target')}; prediktor ERA5."]], columns=["", "Keterangan"]).set_index(""))
 
     halaman_baru(); st.markdown("## 4. Metode")
     st.markdown("**Alur analisis**")
-    kotak_html('<div class="row"><div class="b" style="background:#2a6f97">Model iklim<br><small>' + str(meta.get("gcm")) + ' · ' + str(meta.get("skenario")) + '</small></div><div class="ar">→</div><div class="b" style="background:#2f6f8f">Prediktor skala besar<br><small>indeks regional</small></div><div class="ar">→</div>'
-               '<div class="b" style="background:#8a5fb0">Model statistik<br><small>GLM, RF, XGBoost, NN</small></div><div class="ar">→</div><div class="b" style="background:#e8833a">Simulasi hujan bulanan<br><small>ensemble per grid</small></div><div class="ar">→</div><div class="b" style="background:#d1495b">SPI → bulan kering<br><small>SPI ≤ -1</small></div></div>'
-               '<div class="l">Model statistik dilatih pada data pengamatan nyata</div><div class="row"><div class="b" style="background:#2a9d8f">ERA5 (prediktor) + CHIRPS (hujan), 1981-2020 → dilatih lalu diterapkan ke prediktor GCM</div></div>', 150)
+    kotak_html('<div class="row"><div class="b" style="background:#1f6fb5">Model iklim<br><small>' + str(meta.get("gcm")) + ' · ' + str(meta.get("skenario")) + '</small></div><div class="ar">→</div><div class="b" style="background:#1f6fb5">Prediktor skala besar<br><small>indeks regional</small></div><div class="ar">→</div>'
+               '<div class="b" style="background:#0f8b8d">Model statistik<br><small>GLM, RF, XGBoost, NN</small></div><div class="ar">→</div><div class="b" style="background:#e8710a">Simulasi hujan bulanan<br><small>ensemble per grid</small></div><div class="ar">→</div><div class="b" style="background:#e60000">SPI → bulan kering<br><small>SPI ≤ -1</small></div></div>'
+               '<div class="l">Model statistik dilatih pada data pengamatan nyata</div><div class="row"><div class="b" style="background:#0f8b8d">ERA5 (prediktor) + CHIRPS (hujan), 1981-2020 → dilatih lalu diterapkan ke prediktor GCM</div></div>', 150)
     st.markdown("**Pembagian periode**")
-    kotak_html('<div class="l">Data model</div><div class="t"><div style="flex:40;background:#2f6f8f">1981-2020 · latih dan seleksi (CV blok-tahun)</div><div style="flex:5;background:#e0912b;font-size:9px">2021-25</div><div style="flex:25;background:#2a9d8f">2026-2050 · proyeksi</div></div>'
-               '<div class="yr"><span style="flex:40">1981</span><span style="flex:5">2021</span><span style="flex:25">2026 – 2050</span></div><div class="l">Pembanding</div><div class="t"><div style="flex:30;background:#8d99a6">1981-2010 · masa lalu (baseline)</div><div style="flex:40;background:transparent"></div></div>', 132)
+    kotak_html('<div class="l">Data model</div><div class="t"><div style="flex:40;background:#1f6fb5">1981-2020 · latih dan seleksi (CV blok-tahun)</div><div style="flex:5;background:#e8710a;font-size:9px">2021-25</div><div style="flex:25;background:#0f8b8d">2026-2050 · proyeksi</div></div>'
+               '<div class="yr"><span style="flex:40">1981</span><span style="flex:5">2021</span><span style="flex:25">2026 – 2050</span></div><div class="l">Pembanding</div><div class="t"><div style="flex:30;background:#8793a3">1981-2010 · masa lalu (baseline)</div><div style="flex:40;background:transparent"></div></div>', 132)
     cara("Hold-out 2021-2025 (kuning) dikunci: tidak dipakai untuk tuning, memilih model, maupun menyetel ambang; dievaluasi satu kali setelah semua keputusan dikunci.")
     st.markdown("- **Tuning adil:** keempat model dituning dengan data, lipatan validasi, skor, dan anggaran pencarian yang sama.\n- **Pemilihan model:** " + SEL_PANJANG + "; ini berarti *terbaik di antara beberapa model*, bukan *terbukti lebih baik dari klimatologi*.\n"
                 "- **Dua tingkat validasi:** Tingkat 1 (data pengamatan sefase) menilai skill sebenarnya; Tingkat 2 (prediktor GCM, tidak sefase) hanya bisa menilai sebaran.\n- **SPI** dihitung dari simulasi hujan bulanan; bulan dianggap kering bila SPI ≤ -1.")
@@ -667,9 +679,9 @@ def halaman_laporan():
         fig.add_trace(go.Bar(x=mm, y=[sa[m_] for m_ in mm], marker_color=[PROY if m_ == UTAMA else ABU for m_ in mm], text=[n(sa[m_], 2, True) for m_ in mm], textposition="outside", textfont_size=9, cliponaxis=False), row=1, col=1)
         sb = tr.get("selisih_semua") or {}; mb = [m_ for m_ in ML if m_ in sb]
         fig.add_trace(go.Bar(x=mb, y=[sb[m_] for m_ in mb], marker_color=[PROY if m_ == UTAMA else TRANSF if m_ == TRANSFER else ABU for m_ in mb], text=[n(sb[m_], 1, True) for m_ in mb], textposition="outside", textfont_size=9, cliponaxis=False), row=1, col=2)
-        for yy in (3, -3): fig.add_hline(y=yy, line_dash="dot", line_color="#8794a3", row=1, col=2)
+        for yy in (3, -3): fig.add_hline(y=yy, line_dash="dot", line_color="#8793a3", row=1, col=2)
         pt = ho.get("crpss_per_tahun") or {}
-        fig.add_trace(go.Bar(x=list(pt), y=[pt[k] for k in pt], marker_color=["#2a9d8f" if v > 0 else "#e76f51" for v in pt.values()], text=[n(v, 2, True) for v in pt.values()], textposition="outside", textfont_size=9, cliponaxis=False), row=1, col=3)
+        fig.add_trace(go.Bar(x=list(pt), y=[pt[k] for k in pt], marker_color=["#0f8b8d" if v > 0 else "#e8710a" for v in pt.values()], text=[n(v, 2, True) for v in pt.values()], textposition="outside", textfont_size=9, cliponaxis=False), row=1, col=3)
         for c_ in (1, 3): fig.add_hline(y=0, line_color="#555", line_width=1, row=1, col=c_)
         fig.update_annotations(font_size=10); fig.update_xaxes(tickfont=dict(size=9)); gambar(fig, 270)
         cara("Kiri: skill pada data nyata sefase (CRPSS > 0 = lebih baik daripada klimatologi). Tengah: pada prediktor GCM, selisih frekuensi bulan kering terhadap pengamatan (garis putus = ±3 poin); biru = model dipakai, ungu = paling dekat pengamatan. Kanan: konsistensi per tahun hold-out.")
@@ -739,19 +751,19 @@ def halaman_laporan():
 
 if LAPORAN: halaman_laporan(); st.stop()
 
-# ================================================================== DASHBOARD SATU LAYAR
-LAYAR_PENUH = """<style>body{margin:0;font-family:"Segoe UI",Arial,sans-serif}button{margin-top:19px;width:100%;height:30px;border:1px solid #c8cfd8;border-radius:6px;background:#fff;color:#1d2b3a;font-size:12px;cursor:pointer}button:hover{background:#eef5f9}</style>
+# ------------------------------------------------------------------ susunan utama (dashboard satu layar)
+LAYAR_PENUH = """<style>body{margin:0;font-family:"Poppins","Segoe UI",Arial,sans-serif}button{margin-top:19px;width:100%;height:30px;border:1px solid #d3dde9;border-radius:6px;background:#fff;color:#10243b;font-size:12px;cursor:pointer}button:hover{background:#eef2f7}</style>
 <button id="b" onclick="go()">⛶ Layar penuh</button>
 <script>function go(){var b=document.getElementById('b'),f=function(){b.textContent='Tekan F11';};try{var d=window.parent.document; if(d.fullscreenElement){d.exitFullscreen();}else{var p=d.documentElement.requestFullscreen(); if(p&&p.catch){p.catch(f);}}}catch(e){f();}}</script>"""
 
-if EMBED: LAYAR_PENUH = LAYAR_PENUH.replace("border:1px solid #c8cfd8;border-radius:6px;background:#fff;color:#1d2b3a", "border:1px solid rgba(255,255,255,.35);border-radius:6px;background:transparent;color:#fff").replace("button:hover{background:#eef5f9}", "button:hover{background:rgba(255,255,255,.12)}")
+if EMBED: LAYAR_PENUH = LAYAR_PENUH.replace("border:1px solid #d3dde9;border-radius:6px;background:#fff;color:#10243b", "border:1px solid rgba(255,255,255,.35);border-radius:6px;background:transparent;color:#fff").replace("button:hover{background:#eef2f7}", "button:hover{background:rgba(255,255,255,.12)}")
 if EMBED:      # [INTEGRASI] judul sudah ada di header app.py; kontrol masuk bilah filter gelap
     with st.container(key="filt2"): c_s, c_m, c_y, c_p, c_f = st.columns([2.0, 1.5, 2.2, 2.0, 1.1], gap="small")
 else: c_t, c_s, c_m, c_y, c_p, c_f = st.columns([3.0, 1.9, 1.2, 1.5, 1.9, 1.05], gap="small")
-with c_s: skala = pilih(list(meta["spi_skala"]), "skala", "Jangka", fmt=lambda s: NAMA_SKALA.get(s, s))
-with c_m: musim = st.selectbox("Musim", list(PRESET))
-with c_y: t0, t1 = st.select_slider("Tahun", th_all, value=(th_all[0], th_all[-1]))
-with c_p: mode = pilih(["Selisih", "Kering", "Bias"], "mode_peta", "Peta", default=PETA_AWAL)
+with c_s: skala = pilih(list(meta["spi_skala"]), "p3_skala", "Jangka", fmt=lambda s: NAMA_SKALA.get(s, s))
+with c_m: musim = st.selectbox("Musim", list(PRESET), key="p3_musim")
+with c_y: t0, t1 = st.select_slider("Tahun", th_all, value=(th_all[0], th_all[-1]), key="p3_tahun")
+with c_p: mode = pilih(["Selisih", "Kering", "Bias"], "p3_peta", "Peta", default=PETA_AWAL)
 with c_f: iframe(LAYAR_PENUH, 52)
 if not EMBED: c_t.markdown(f'<div class="ttl">{JUDUL_PROYEK}</div><div class="sub">{meta.get("gcm")} · {meta.get("skenario")} · periode {t0}-{t1} · vs 1981-2010 · kering = SPI ≤ −1</div>', unsafe_allow_html=True)
 
@@ -776,7 +788,7 @@ FA, FB, FC = (' style="grid-template-columns:1fr"', "<div>", "</div>") if EMBED 
 st.markdown(f'<div class="foot"{FA}>{FB}{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca · pola kotak peta mengikuti sel GCM yang kasar · uji beda nyata: {"formal (notebook, block bootstrap)" if R.get("uji") == "resmi" else "pendekatan cepat (rentang tahun bukan seluruh horizon)"}{" · " + PEMBUAT if PEMBUAT else ""}{FC}</div>', unsafe_allow_html=True)
 
 
-# ---- v25: panel "Seberapa bisa dipercaya?" (angka dibaca dari meta; tidak dihitung ulang) ----
+# ------------------------------------------------------------------ panel "Seberapa bisa dipercaya?" (angka dibaca dari meta; tidak dihitung ulang)
 V_ = meta.get("validasi") or {}
 if V_ and not LAPORAN:
     with st.expander("Seberapa bisa dipercaya? (validasi dan keterbatasan)"):
