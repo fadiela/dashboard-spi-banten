@@ -1,28 +1,37 @@
-# dashboard-spi-banten
+# Dashboard Downscaling CMCC-ESM2 dan SPI Banten
 
-Dashboard Streamlit proyeksi bulan kering (SPI ≤ −1) Banten, hasil downscaling GCM (CMCC-ESM2, SSP370).
+Dashboard Streamlit satu halaman untuk menyajikan evaluasi downscaling curah hujan dari **CMCC-ESM2** dengan **CHIRPS** sebagai data referensi, serta hasil proyeksi kekeringan berbasis SPI.
 
-## Tampilan
-| URL | Isi |
-|---|---|
-| `/` | Dashboard satu layar: kesimpulan, 4 kartu, peta, per tahun, per bulan, per kab/kota, per model |
-| `/?laporan=1` | Laporan naratif siap cetak PDF (termasuk heatmap tahun × bulan dan deret SPI, untuk pemahaman sendiri) |
-| `/?embed=true` | Tanpa header/footer Streamlit (lebih bersih saat dipresentasikan) |
-| `/?tinggi=210` | Tinggi grafik kecil dalam px (default 178; naikkan di monitor besar/layar penuh) |
+## Isi dashboard
 
-Parameter bisa digabung: `/?embed=true&tinggi=210`.
+1. **Evaluasi downscaling** — ringkasan validasi pada prediktor ERA5 dan prediktor GCM, serta korelasi temporal GCM–CHIRPS jika tabel tersedia.
+2. **Hasil SPI** — frekuensi bulan kering (SPI ≤ −1), pembanding baseline model dan CHIRPS, pola tahunan dan bulanan, peta grid, serta deret waktu SPI.
+3. **Keterbatasan** — catatan interpretasi proyeksi, validasi, dan ketidakpastian.
 
-## Layar penuh
-Tombol **⛶ Layar penuh** di kanan atas. Jika browser memblokir, tekan **F11** (Windows/Linux) atau **Ctrl+Cmd+F** (Mac).
+## Menjalankan secara lokal
 
-## Cara membaca singkat
-- Kalimat di atas kartu = kesimpulan utama. Warna samping: abu = belum beda nyata, merah = lebih sering kering, biru = lebih jarang.
-- **Naik-turun alami** = 2 × galat baku antar-tahun. Selisih di bawahnya belum bisa dipastikan (abu/pudar).
-- Titik pada kartu *Keyakinan* = 6 syarat (hijau = terpenuhi, oranye = belum). Arahkan kursor untuk melihat isinya.
-- Angka mutlak proyeksi sengaja tidak ditampilkan karena model terlalu kering di masa lalu (lihat kartu *Masa lalu*); yang dibaca adalah selisih.
+```bash
+pip install -r requirements.txt
+streamlit run app_dashboard_spi.py
+```
 
-## Berkas
-`app_dashboard_spi.py` (aplikasi) · `dashboard_*.csv/.gz/.json` (ekspor notebook sel 14d-14f) · `banten_kabkota.geojson` · `config.toml` (tema; salin ke `.streamlit/config.toml`) · `requirements.txt`
+Berkas data hasil ekspor notebook dan `dashboard_meta.json` harus berada di folder yang sama dengan aplikasi, atau diarahkan melalui variabel lingkungan `HASIL_DIR`.
 
-## Otomatis menyesuaikan layar
-Folder `ukuran_layar/` berisi komponen kecil yang melaporkan tinggi dan lebar jendela. Grafik mengisi sisa tinggi layar dan huruf membesar di layar lebar, termasuk saat tombol **⛶ Layar penuh** ditekan. Bila komponen tidak termuat, tampilan memakai ukuran tetap. Manual: `?vh=900&vw=1600` (paksa ukuran jendela) atau `?tinggi=200` (paksa tinggi grafik).
+## Data yang dibutuhkan
+
+- `dashboard_meta.json`
+- `dashboard_bulanan_per_grid.csv.gz`
+- `dashboard_baseline_bulan_grid.csv.gz`
+- `dashboard_grid.csv` (opsional untuk peta)
+- `dashboard_bulanan_regional.csv.gz` (opsional untuk deret SPI)
+- `dashboard_korelasi.csv` (opsional untuk korelasi temporal)
+- `dashboard_uji.csv` (metadata ringkasan uji formal disimpan dalam JSON; file ini tidak wajib untuk tampilan ringkasan)
+
+## Catatan interpretasi
+
+- CRPSS positif menunjukkan skill lebih baik daripada klimatologi; CRPSS negatif menunjukkan skill lebih rendah daripada pembanding klimatologi.
+- Validasi dengan prediktor ERA5 yang sefase dengan data observasi tidak otomatis menjamin transfer yang sama pada prediktor GCM.
+- Uji beda nyata formal hanya ditampilkan ketika pilihan skala, periode, dan musim sesuai dengan cakupan uji yang tersimpan.
+- Hasil proyeksi adalah proyeksi bersyarat skenario, bukan ramalan cuaca untuk tahun tertentu.
+- Satu GCM dan satu skenario tidak mencakup seluruh ketidakpastian proyeksi iklim.
+- Metrik evaluasi hujan seperti MAE, RMSE, dan bias tidak ditampilkan jika belum tersedia dalam berkas ekspor.
