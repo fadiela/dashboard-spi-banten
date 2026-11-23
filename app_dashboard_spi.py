@@ -31,8 +31,8 @@ PEMBUAT = "Gemala Aleida Fitri · Statistika dan Sains Data, IPB University"   #
 JUDUL_PROYEK = "Downscaling GCM Hujan untuk Proyeksi Kekeringan (SPI) di Banten"   # ganti dengan judul proyekmu
 H_KPI = 98                          # tinggi blok kartu angka (px)
 H_BAN = 64                          # tinggi banner kesimpulan di atas kartu (px); banner ada DI DALAM iframe kartu supaya tidak tertimpa elemen lain
-H_KECIL = 178                       # tinggi tiap grafik kecil (px); 2 baris grafik + banner + kartu muat di layar 1366x768 (bisa diubah lewat ?tinggi=)
-H_BAWAH = 230                       # tinggi grafik baris bawah (deret SPI dan heatmap), px
+H_KECIL = 140                       # tinggi tiap grafik kecil (px); 2 baris grafik + banner + kartu muat di layar 1366x768 (bisa diubah lewat ?tinggi=)
+H_SUM = 100                         # tinggi baris kartu ringkasan 3 jangka (px)
 UKURAN_TEKS, UKURAN_TEKS_LAPORAN = 15, 15
 PETA_STYLE = "carto-positron-nolabels"   # peta dasar tanpa nama kota di luar Banten (perlu plotly>=6)
 PETA_AWAL = "Selisih"               # tampilan awal peta: "Selisih" atau "Kering"
@@ -71,7 +71,7 @@ def _ukuran_layar():
 VH, VW = (None, None) if LAPORAN else _ukuran_layar()
 FSKALA = float(np.clip(VW / 1366, 1.0, 1.45)) if VW else 1.0       # layar lebar (mis. layar penuh 1080p): huruf dan kartu ikut membesar
 OVERHEAD_EMBED = 214                  # [INTEGRASI] header + bilah filter + footer app.py + jarak antar-elemen (px, tanpa kartu angka)
-OVERHEAD = (OVERHEAD_EMBED if EMBED else 92) + (H_KPI + H_BAN) * FSKALA                           # tinggi bagian atas (judul, kontrol, kartu), footer, dan jarak antar-elemen
+OVERHEAD = (OVERHEAD_EMBED if EMBED else 92) + (H_KPI + H_BAN + H_SUM + 8) * FSKALA                           # tinggi bagian atas (judul, kontrol, kartu), footer, dan jarak antar-elemen
 if str(st.query_params.get("tinggi", "")).isdigit(): H_KECIL = _angka("tinggi", H_KECIL, 120, 700)       # paksa manual
 elif VH: H_KECIL = int(np.clip((VH - OVERHEAD - 10) / 2, 120, 700))                                       # otomatis: dua baris grafik mengisi sisa tinggi layar
 H_PETA = 2 * H_KECIL + 10           # peta = tinggi dua baris grafik
@@ -245,12 +245,12 @@ def _koord(g):
 
 
 def batas_peta(xs, ys, h):
-    """(barat, timur, selatan, utara): gabungan seluruh kotak grid dan garis batas kab/kota, ditambah ruang 3%."""
+    """(barat, timur, selatan, utara): gabungan seluruh kotak grid dan garis batas kab/kota, ditambah ruang 8-10%."""
     w, e, so, u = xs.min() - h, xs.max() + h, ys.min() - h, ys.max() + h
     if gj is not None:
         for f in gj["features"]:
             for c in _koord(f["geometry"]["coordinates"]): w, e, so, u = min(w, c[0]), max(e, c[0]), min(so, c[1]), max(u, c[1])
-    px, py = (e - w) * 0.03, (u - so) * 0.03
+    px, py = (e - w) * 0.10, (u - so) * 0.08
     return w - px, e + px, so - py, u + py
 
 
@@ -612,7 +612,7 @@ def teks_deret(sk):
     kr = (s_["spi_median"] <= -1).to_numpy(); run = best = 0
     for x in kr: run = run + 1 if x else 0; best = max(best, run)
     mn = s_.loc[s_["spi_median"].idxmin()]
-    cara_ = f"Garis biru = SPI bulanan ({sk}) dari median {meta.get('n_anggota_ensemble', 20)} simulasi; pita = sebaran p10-p90 antar-simulasi. Latar berwarna = kelas SPI menurut BMKG (kuning pucat normal; oranye, merah, merah tua = agak kering, kering, sangat kering; hijau sampai biru = basah). Di bawah garis putus-putus (−1) = bulan kering, ditandai titik sesuai kelasnya; titik berurutan = kekeringan berkepanjangan."
+    cara_ = f"Garis gelap = SPI bulanan ({sk}) dari median {meta.get('n_anggota_ensemble', 20)} simulasi; pita = sebaran p10-p90 antar-simulasi. Area merah muda di bawah garis putus-putus (−1) = daerah bulan kering, ditandai titik merah; titik berurutan = kekeringan berkepanjangan."
     kes = f"Median simulasi mencapai SPI ≤ −1 pada <b>{int(kr.sum())} dari {len(s_)} bulan</b>; paling kering {BLN[int(mn['bulan']) - 1]} {int(mn['tahun'])} (SPI {n(mn['spi_median'], 2)}), dan rangkaian terpanjang <b>{best} bulan berturut-turut</b>. Tahun-tahun kering berasal dari variabilitas internal satu simulasi model, bukan ramalan kejadian nyata."
     return cara_, kes
 
@@ -620,12 +620,12 @@ def teks_deret(sk):
 def fig_deret(sk, t0=None, t1=None):
     s_ = D["reg"][D["reg"]["SPI"] == sk]; s_ = s_ if t0 is None else s_[s_["tahun"].between(t0, t1)]; s_ = s_.sort_values(["tahun", "bulan"]); x = pd.to_datetime(dict(year=s_["tahun"], month=s_["bulan"], day=1))
     fig = go.Figure()
-    for lo, hi, _, w in SPI_KELAS: fig.add_hrect(y0=max(lo, -3.5), y1=min(hi, 3.5), fillcolor=w, opacity=0.30, line_width=0, layer="below")      # pita kelas SPI BMKG
+    fig.add_hrect(y0=-3.5, y1=-1, fillcolor="#e60000", opacity=0.07, line_width=0, layer="below")      # area bulan kering (SPI ≤ -1)
     fig.add_trace(go.Scatter(x=x, y=s_["spi_p90"], line=dict(width=0), hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=x, y=s_["spi_p10"], fill="tonexty", fillcolor="rgba(31,111,181,.22)", line=dict(width=0), name="sebaran antar-simulasi (p10-p90)", hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=x, y=s_["spi_median"], line=dict(color=PROY, width=1.6), name="SPI (median simulasi)", hovertemplate="%{x|%b %Y}<br>SPI %{y:.2f}<extra></extra>"))
+    fig.add_trace(go.Scatter(x=x, y=s_["spi_p10"], fill="tonexty", fillcolor="rgba(135,147,163,.28)", line=dict(width=0), name="sebaran antar-simulasi (p10-p90)", hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=x, y=s_["spi_median"], line=dict(color=INK, width=1.6), name="SPI (median simulasi)", hovertemplate="%{x|%b %Y}<br>SPI %{y:.2f}<extra></extra>"))
     kr = s_["spi_median"] <= -1
-    fig.add_trace(go.Scatter(x=x[kr], y=s_.loc[kr, "spi_median"], mode="markers", marker=dict(color=[spi_warna(v) for v in s_.loc[kr, "spi_median"]], size=7, line=dict(color="#4a1a1a", width=0.6)), name="bulan kering (SPI ≤ -1)", hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=x[kr], y=s_.loc[kr, "spi_median"], mode="markers", marker=dict(color="#e60000", size=6), name="bulan kering (SPI ≤ -1)", hoverinfo="skip"))
     fig.add_hline(y=-1, line_dash="dash", line_color="#e60000", line_width=1.3); fig.add_hline(y=0, line_color="#8793a3", line_width=1)
     fig.update_yaxes(title_text="SPI", range=[-3.5, 3.5]); return fig
 
@@ -826,7 +826,6 @@ sm = model_selisih(skala, t0, t1, R=R); am0 = arah_model(sm)
 kh, cek, n_ok, yak, yak_c, am, naik, turun = kartu_html(R, sm, atas=banner(R, sm, am0)[0], zoom=FSKALA)
 iframe(kh, int((H_KPI + H_BAN) * FSKALA))
 
-seksi("Perubahan frekuensi bulan kering", f"proyeksi {t0}-{t1} dibanding masa lalu model (1981-2010) · {NAMA_SKALA_PANJANG.get(skala, skala)} · {musim.lower()}")
 col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
 with col_peta:
     gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA), H_PETA, tetap=True, judul={"Selisih": "Peta · selisih vs masa lalu · pekat = nyata, pucat = belum pasti", "Kering": "Peta · bulan kering per 100 bulan", "Bias": "Peta · bias masa lalu: model − nyata (bln/100)"}[mode])
@@ -839,23 +838,41 @@ with col_c:
     if len(sm) >= 2: gambar(fig_model(sm, compact=True, amb=R["amb"]), H_KECIL, judul=("Per model · ★ = dipakai · area abu = naik-turun alami" if len(R["bulan"]) == 12 else "Per model · seluruh bulan (tak ikut musim) · ★ = dipakai"))
     else: st.caption("Data perbandingan model belum ada.")
 
-# ------------------------------------------------------------------ baris bawah: seberapa kering, bukan hanya selisih
-if D["reg"] is not None:
-    seksi("Deret SPI dan peluang kering", f"median {meta.get('n_anggota_ensemble', 20)} simulasi · {t0}-{t1} · latar = kelas SPI BMKG")
-    c_d, c_h = st.columns([6, 4], gap="small")
-    with c_d: gambar(fig_deret(skala, t0, t1), H_BAWAH, judul="Deret SPI bulanan · pita = p10-p90 · titik = bulan kering (SPI ≤ −1)")
-    with c_h: gambar(fig_heat(skala, t0, t1), H_BAWAH, judul="Peluang kering · bulan × tahun")
-    di = deret_info(skala, t0, t1)
-    if di: st.caption(f"Median simulasi kering pada {di['n_k']} dari {di['N']} bulan · paling kering {di['mn']} (SPI {n(di['mn_v'], 2)}) · rangkaian terpanjang {di['best']} bulan berturut-turut" + (f" ({di['a']} s/d {di['b']})" if di['best'] else "") + " · variabilitas internal satu simulasi, bukan ramalan kejadian nyata.")
+# ------------------------------------------------------------------ baris bawah: ringkasan tiga jangka (satu baris kartu)
+SUM_CSS = """<style>
+body {margin:0; padding:2px 1px 0; zoom:__Z__; background:#eef2f7; font-family:"Poppins","Segoe UI",Arial,sans-serif; color:#10243b;}
+.g3 {display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px;}
+.t3 {background:#fff; border:1px solid #dde4ec; border-left:5px solid var(--c); border-radius:7px; padding:5px 10px; height:92px; box-sizing:border-box; overflow:hidden;}
+.t3.on {box-shadow:0 0 0 2px #1f6fb533; border-color:#1f6fb5; border-left-color:var(--c);}
+.k {font-size:10.5px; font-weight:700; color:#44566c; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap;}
+.r {display:flex; align-items:baseline; gap:6px; white-space:nowrap;}
+.v {font-size:22px; font-weight:700; line-height:1.2;} .v small {font-size:11px; font-weight:500; color:#5b6b7f;}
+.chip {margin-left:auto; padding:0 8px; border-radius:9px; font-size:10px; font-weight:700; color:#fff; white-space:nowrap;}
+.red {background:#e60000;} .blue {background:#37a800;} .gray {background:#5b6b7f;}
+.br {display:flex; align-items:center; gap:6px; font-size:10.5px; color:#44566c; margin-top:3px;}
+.br b {width:84px; font-weight:600; white-space:nowrap;} .br span {flex:1; height:7px; background:#e6ebf1; border-radius:4px; overflow:hidden;} .br i {display:block; height:100%; border-radius:4px;}
+</style>"""
 
-seksi("Ringkasan tiga jangka dan gerbang model", "tabel ikut musim dan rentang tahun yang dipilih")
-c_t1, c_t2 = st.columns([6, 6], gap="small")
-with c_t1:
-    tb = tabel_tiga_jangka(t0, t1, PRESET[musim])
-    if tb is not None: st.dataframe(tb, use_container_width=True)
-with c_t2:
-    tg = tabel_gerbang()
-    if tg is not None: st.dataframe(tg, use_container_width=True)
+
+def ringkasan_html(t0, t1, bulan, aktif, zoom=1.0):
+    rs = []
+    for s_ in meta["spi_skala"]:
+        Rk = ringkas(s_, bulan, t0, t1)
+        if Rk: rs.append((s_, Rk))
+    if not rs: return None
+    mx = max(max(r["proy"], r["base"], r["ref"]) for _, r in rs) * 1.05
+    t = []
+    for s_, r in rs:
+        k = r["kode"]; cls = {"sama": "gray", "lebih": "red", "kurang": "blue", "sedikit": "gray"}[k]
+        t.append(f'<div class="t3{" on" if s_ == aktif else ""}" style="--c:{WARNA_CHIP[WARNA_KODE[k]]}"><div class="k">{s_.replace("SPI-", "SPI ")} · {NAMA_SKALA_PANJANG.get(s_, s_).split(" (")[0]}</div>'
+                 f'<div class="r"><span class="v">{n(r["sel"], 1, True)} <small>dari 100 bulan</small></span><span class="chip {cls}">{SIM[k]} {KATA[k].upper()}</span></div>'
+                 f'<div class="br"><b>Masa lalu {n(r["base"], 0)}</b><span><i style="width:{r["base"] / mx * 100:.0f}%;background:#7f95ad"></i></span></div>'
+                 f'<div class="br"><b>Proyeksi {n(r["proy"], 0)}</b><span><i style="width:{r["proy"] / mx * 100:.0f}%;background:#1f6fb5"></i></span></div></div>')
+    return SUM_CSS.replace("__Z__", str(round(zoom, 3))) + '<div class="g3">' + "".join(t) + "</div>"
+
+
+_sh = ringkasan_html(t0, t1, PRESET[musim], skala, FSKALA)
+if _sh: iframe(_sh, int((H_SUM) * FSKALA))
 
 FA, FB, FC = (' style="grid-template-columns:1fr"', "<div>", "</div>") if EMBED else ("", "", "")      # [INTEGRASI] footer 1 kotak mengikuti gaya app.py
 st.markdown(f'<div class="foot"{FA}>{FB}{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca · pola kotak peta mengikuti sel GCM yang kasar · uji beda nyata: {"formal (notebook, block bootstrap)" if R.get("uji") == "resmi" else "pendekatan cepat (rentang tahun bukan seluruh horizon)"}{" · " + PEMBUAT if PEMBUAT else ""}{FC}</div>', unsafe_allow_html=True)
