@@ -9,6 +9,10 @@ Ukuran layar: komponen ukuran_layar/ melaporkan tinggi dan lebar jendela, sehing
 Uji beda nyata: bila dashboard_uji.csv (notebook 14j) ada dan rentang tahun = seluruh horizon, dipakai uji formal (block bootstrap); selain itu pendekatan cepat 2 x galat baku.
 Warna SPI: kelas dan warna mengikuti legenda peta SPI BMKG (SPI_KELAS di bawah).
 
+Perubahan legenda (v-legenda):
+  - judul panel hanya berisi nama panel; arti garis/warna (gelap = rata-rata 5 tahun, putus = masa lalu, pekat = beda nyata, pucat = belum pasti, area abu = naik-turun alami, ★ = dipakai) pindah ke legenda grafik
+  - warna chip "lebih jarang kering" disamakan menjadi hijau BMKG (#37a800), sama dengan batang, peta, dan kartu 3 jangka
+
 Perubahan v-kontras:
   - kepastian = kepekatan warna, arah (merah/hijau) selalu terbaca; abu tidak lagi dipakai untuk "belum pasti"
   - skala warna peta mengikuti sebaran data, bukan batas naik-turun alami
@@ -144,7 +148,7 @@ def spi_warna(v):
 ABU_N = "#c5d3e2"                               # (cadangan) abu lama; tidak dipakai lagi untuk batang
 MERAH, BIRU = "#e60000", "#37a800"              # merah BMKG = lebih sering kering, hijau BMKG = lebih jarang kering (lebih basah)
 MERAH_P, BIRU_P = "rgba(230,0,0,.42)", "rgba(55,168,0,.42)"      # pucat = belum beda nyata, tetapi arah tetap terbaca
-WARNA_CHIP = {"red": MERAH, "blue": BLUE, "gray": ZERO, "amber": ORANGE, "green": TEAL}
+WARNA_CHIP = {"red": MERAH, "blue": BIRU, "gray": ZERO, "amber": ORANGE, "green": TEAL}      # "blue" = lebih jarang kering = hijau BMKG (sama dengan batang, peta, dan kartu 3 jangka)
 KERING = [[0, "#feffbe"], [0.33, "#e59901"], [0.66, "#e60000"], [1, "#710201"]]                    # persen bulan kering: normal (kuning pucat) -> agak kering -> kering -> sangat kering
 SELISIH = [[0, "#37a800"], [0.25, "#99e702"], [0.5, "#feffbe"], [0.75, "#e59901"], [1, "#e60000"]]     # selisih / bias: hijau = lebih jarang kering, merah = lebih sering kering
 PRESET = {"Sepanjang tahun": list(range(1, 13)), "Des-Feb": [12, 1, 2], "Mar-Mei": [3, 4, 5], "Jun-Agu": [6, 7, 8], "Sep-Nov": [9, 10, 11]}
@@ -254,19 +258,21 @@ def batas_peta(xs, ys, h):
     return w - px, e + px, so - py, u + py
 
 
-def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, mask=None, catatan=None):
-    """mask (Series bool): kotak True = beda nyata (warna pekat); kotak lain lebih pucat tetapi tetap berwarna sesuai arah. Peta dikunci: tidak bisa digeser/diperbesar."""
+def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, mask=None, catatan=None, legenda=None):
+    """mask (Series bool): kotak True = beda nyata (warna pekat); kotak lain lebih pucat tetapi tetap berwarna sesuai arah. Peta dikunci: tidak bisa digeser/diperbesar.
+    legenda: [(nama, warna)] -> entri legenda (penanda bulat tanpa data); arti pekat/pucat/merah/hijau dijelaskan di legenda, bukan di judul."""
     xs, ys = np.unique(df["lon"].round(4)), np.unique(df["lat"].round(4)); h = float(np.median(np.diff(xs)) / 2) if len(xs) > 1 else 0.025
 
     def trace(d, op, bar):
         kotak = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": str(int(g)), "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[lo - h, la - h], [lo + h, la - h], [lo + h, la + h], [lo - h, la + h], [lo - h, la - h]]]}} for g, lo, la in zip(d["grid_id"], d["lon"], d["lat"])]}
-        return go.Choroplethmap(geojson=kotak, locations=d["grid_id"].astype(int).astype(str), z=d[kol], text=d["wilayah"].fillna("Di luar batas kab/kota"), colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid, showscale=bar,
+        return go.Choroplethmap(geojson=kotak, locations=d["grid_id"].astype(int).astype(str), z=d[kol], text=d["wilayah"].fillna("Di luar batas kab/kota"), colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid, showscale=bar, showlegend=False,
                                 marker=dict(opacity=op, line=dict(width=0)), colorbar=dict(title=dict(text=satuan, font=dict(size=10), side="top"), thickness=9, len=0.5, tickfont=dict(size=10), x=0.995),
                                 hovertemplate="<b>%{text}</b><br>%{z:.1f} " + satuan + "<extra></extra>")
     fig = go.Figure()
     if mask is None: fig.add_trace(trace(df, 0.88, True))
     elif not bool(mask.any()): fig.add_trace(trace(df, 0.82, True))
     else: fig.add_trace(trace(df, 0.62, True)); fig.add_trace(trace(df[mask.to_numpy()], 0.95, False))
+    for nm_, wr_ in (legenda or []): fig.add_trace(go.Scattermap(lon=[None], lat=[None], mode="markers", marker=dict(size=11, color=wr_), name=nm_, showlegend=True, hoverinfo="skip"))
     lon_r, lat_r = max(xs.max() - xs.min() + 2 * h, 0.2) * 1.08, max(ys.max() - ys.min() + 2 * h, 0.2) * 1.08 / np.cos(np.radians(float(ys.mean())))
     zoom = float(np.clip(min(np.log2(360 * lebar / (512 * lon_r)), np.log2(360 * tinggi / (512 * lat_r))), 5, 11))      # 512 px/tile (MapLibre)
     lay = dict(style=PETA_STYLE, center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom)
@@ -278,13 +284,17 @@ def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, m
     return fig
 
 
-def gambar(fig, h, judul=None, legenda=False, tetap=False):
-    """tetap=True: grafik dikunci (tanpa scroll-zoom, double-click, dan geser); dipakai untuk peta."""
-    fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=11, color=INK2, family=FONT), hoverlabel=dict(font_size=11, bgcolor="#fff", font_color=INK), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, uniformtext=dict(minsize=9, mode="hide"), legend=dict(orientation="h", y=1.14, x=0, font_size=10))
-    if judul: fig.update_layout(margin=dict(l=2, r=2, t=24, b=2), title=dict(text=judul.upper(), x=0.005, xanchor="left", y=0.99, yanchor="top", font=dict(size=11.5, color=INK)))      # judul panel DI DALAM grafik
+def gambar(fig, h, judul=None, legenda=False, tetap=False, leg_pos="atas"):
+    """tetap=True: grafik dikunci (tanpa scroll-zoom, double-click, dan geser); dipakai untuk peta.
+    legenda=True: tampilkan legenda. leg_pos="atas": satu baris dengan judul panel (rata kanan; rata kiri bila tanpa judul); "dalam": kotak kecil di kiri-bawah (peta)."""
+    fig.update_layout(height=h, margin=dict(l=2, r=2, t=2, b=2), font=dict(size=11, color=INK2, family=FONT), hoverlabel=dict(font_size=11, bgcolor="#fff", font_color=INK), plot_bgcolor="white", paper_bgcolor="white", separators=",.", showlegend=legenda, uniformtext=dict(minsize=9, mode="hide"))
+    if leg_pos == "dalam": fig.update_layout(legend=dict(orientation="v", x=0.01, y=0.01, xanchor="left", yanchor="bottom", bgcolor="rgba(255,255,255,.88)", font_size=10, itemsizing="constant"))
+    else: fig.update_layout(legend=dict(orientation="h", x=1 if judul else 0, xanchor="right" if judul else "left", y=1.0, yanchor="bottom", font_size=9.5, itemsizing="constant", tracegroupgap=0, itemwidth=30))      # di strip atas, sebaris dengan judul
+    if judul or (legenda and leg_pos == "atas"): fig.update_layout(margin=dict(l=2, r=2, t=24, b=2))
+    if judul: fig.update_layout(title=dict(text=judul.upper(), x=0.005, xanchor="left", y=0.99, yanchor="top", font=dict(size=11.5, color=INK)))      # judul panel DI DALAM grafik (hanya nama panel; arti garis/warna ada di legenda)
     fig.update_xaxes(showgrid=False, linecolor=GRID); fig.update_yaxes(gridcolor=GRID, zeroline=False)
     if FSKALA > 1.01:      # layar lebar: perbesar huruf grafik (sumbu, label batang, judul, catatan)
-        fs = lambda v: round(v * FSKALA, 1); fig.update_layout(font_size=fs(11)); fig.update_xaxes(tickfont_size=fs(10)); fig.update_yaxes(tickfont_size=fs(10))
+        fs = lambda v: round(v * FSKALA, 1); fig.update_layout(font_size=fs(11), legend_font_size=fs(9.5 if leg_pos == "atas" else 10)); fig.update_xaxes(tickfont_size=fs(10)); fig.update_yaxes(tickfont_size=fs(10))
         for tr in fig.data:
             try: tr.textfont.size = fs(10)
             except Exception: pass
@@ -413,7 +423,7 @@ body {margin:0; padding:2px 1px 0; zoom:__Z__; background:__BG__; font-family:"P
 .v small {font-size:11px; font-weight:500; color:#5b6b7f;}
 .s {font-size:11px; color:#44566c; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .chip {max-width:100%; overflow:hidden; text-overflow:ellipsis; vertical-align:top; display:inline-block; padding:0 8px; border-radius:9px; font-size:10px; font-weight:700; color:#fff; margin-top:2px; white-space:nowrap;}
-.red {background:#e60000;} .blue {background:#1f6fb5;} .gray {background:#5b6b7f;} .amber {background:#e8710a;} .green {background:#0f8b8d;}
+.red {background:#e60000;} .blue {background:#37a800;} .gray {background:#5b6b7f;} .amber {background:#e8710a;} .green {background:#0f8b8d;}
 .verd {background:#fff; border:1px solid #dde4ec; border-left:6px solid var(--c); border-radius:6px; padding:5px 10px; font-size:14px; line-height:1.3; margin:0 1px 7px;}
 .verd small {display:block; font-size:11px; color:#44566c; margin-top:2px; line-height:1.3;}
 .dot {display:inline-block; width:11px; height:11px; border-radius:50%; margin:0 2px 0 0; vertical-align:middle; background:#d9dee4;} .dot.ok {background:#0f8b8d;} .dot.no {background:#e8710a;}
@@ -480,12 +490,24 @@ def tren_tahun(yr):
     return 10 * b, 10 * float(np.sqrt((res ** 2).sum() / (len(y) - 2) / (xm ** 2).sum()))
 
 
+def _ket(fig, items, h=False):
+    """Entri legenda tanpa data. item = (nama, "kotak"|"garis", warna[, dash]). Penjelasan gaya (gelap, putus, pekat, pucat, area abu) ada di legenda, bukan di judul panel."""
+    for it in items:
+        nm_, jn_, wr_ = it[:3]
+        if jn_ == "kotak": fig.add_trace(go.Bar(x=[None], y=[None], orientation="h" if h else "v", name=nm_, marker=dict(color=wr_), showlegend=True, hoverinfo="skip"))
+        else: fig.add_trace(go.Scatter(x=[None], y=[None], mode="lines", name=nm_, line=dict(color=wr_, width=2.5, dash=it[3] if len(it) > 3 else "solid"), showlegend=True, hoverinfo="skip"))
+
+
+K_NYATA, K_PUCAT, K_ABU = "#5b6b7f", "rgba(91,107,127,.35)", "rgba(135,147,163,.35)"      # swatch legenda: pekat = beda nyata, pucat = belum pasti, abu = naik-turun alami
+
+
 def fig_tahun(R):
     """Batang = % bulan kering tiap tahun (satu realisasi, bukan ramalan); garis tebal = rata-rata bergulir 5 tahun; putus = masa lalu model."""
     yr = R["per_th"]; x = yr.index.astype(int); mv = yr.rolling(5, center=True, min_periods=3).mean()
-    fig = go.Figure(); fig.add_trace(go.Bar(x=x, y=yr.values, marker_color="rgba(31,111,181,.72)", hovertemplate="%{x}<br>%{y:.0f} dari 100 bulan kering<extra></extra>"))
-    fig.add_trace(go.Scatter(x=x, y=mv.values, mode="lines", line=dict(color=INK, width=3.2), hovertemplate="%{x}: rata-rata 5 tahun %{y:.1f}<extra></extra>"))
+    fig = go.Figure(); fig.add_trace(go.Bar(x=x, y=yr.values, name="tiap tahun", marker_color="rgba(31,111,181,.72)", hovertemplate="%{x}<br>%{y:.0f} dari 100 bulan kering<extra></extra>"))
+    fig.add_trace(go.Scatter(x=x, y=mv.values, mode="lines", name="rata-rata 5 tahun", line=dict(color=INK, width=3.2), hovertemplate="%{x}: rata-rata 5 tahun %{y:.1f}<extra></extra>"))
     fig.add_hline(y=R["base"], line_dash="dot", line_color=MERAH, line_width=2.5)
+    _ket(fig, [("masa lalu model", "garis", MERAH, "dot")])
     fig.update_layout(bargap=0.22, yaxis_range=[0, max(float(yr.max()), R["base"]) * 1.12]); fig.update_xaxes(dtick=5, tickfont=dict(size=10)); return fig
 
 
@@ -493,8 +515,9 @@ def fig_bulan(R):
     """Merah/hijau pekat = selisih bulan itu beda nyata (>= 2 x galat baku antar-tahun); merah/hijau pucat = belum pasti tetapi arah tetap terbaca; batang transparan = di luar musim terpilih."""
     d = R["dbulan"]; ny = R["bulan_nyata"].reindex(d.index).fillna(False).astype(bool); pilih_ = [m in R["bulan"] for m in d.index]
     warna = [(MERAH if v > 0 else BIRU) if nn else (MERAH_P if v > 0 else BIRU_P) for v, nn in zip(d.values, ny.values)]
-    fig = go.Figure(go.Bar(x=[BLN[m - 1] for m in d.index], y=d.values, marker=dict(color=warna, opacity=[1 if p else 0.45 for p in pilih_], line=dict(color=[MERAH if v > 0 else BIRU for v in d.values], width=1)), customdata=np.where(ny.values, "beda nyata", "belum pasti"),
+    fig = go.Figure(go.Bar(x=[BLN[m - 1] for m in d.index], y=d.values, showlegend=False, marker=dict(color=warna, opacity=[1 if p else 0.45 for p in pilih_], line=dict(color=[MERAH if v > 0 else BIRU for v in d.values], width=1)), customdata=np.where(ny.values, "beda nyata", "belum pasti"),
                            hovertemplate="%{x}<br>selisih %{y:+.1f} bulan per 100 (%{customdata})<extra></extra>"))
+    _ket(fig, [("beda nyata", "kotak", K_NYATA), ("belum pasti", "kotak", K_PUCAT)] + ([("di luar musim", "kotak", "rgba(91,107,127,.15)")] if not all(pilih_) else []))
     fig.add_hline(y=0, line_color="#555", line_width=1); fig.update_xaxes(tickfont=dict(size=10)); return fig
 
 
@@ -503,7 +526,8 @@ def fig_model(sm, compact=False, amb=None):
     if compact: lab = [m_ + (" ★" if m_ == UTAMA else "") for m_ in urut]; warna = [PROY if m_ == UTAMA else ABU for m_ in urut]
     else: lab = [m_ + ("<br>(dipakai)" if m_ == UTAMA else "<br>(dekat pengamatan)" if m_ == TRANSFER else "") for m_ in urut]; warna = [PROY if m_ == UTAMA else TRANSF if m_ == TRANSFER else ABU for m_ in urut]
     span = max(max(v) - min(v), a_, 1)
-    fig = go.Figure(go.Bar(y=lab, x=v, orientation="h", marker_color=warna, text=[n(x, 1, True) for x in v], textposition="outside", textfont_size=10, cliponaxis=False, hovertemplate="%{y}<br>%{x:+.1f} bulan per 100<extra></extra>"))
+    fig = go.Figure(go.Bar(y=lab, x=v, orientation="h", marker_color=warna, showlegend=False, text=[n(x, 1, True) for x in v], textposition="outside", textfont_size=10, cliponaxis=False, hovertemplate="%{y}<br>%{x:+.1f} bulan per 100<extra></extra>"))
+    _ket(fig, [("★ dipakai" if compact else "dipakai", "kotak", PROY)] + ([("dekat pengamatan", "kotak", TRANSF)] if not compact and TRANSFER in sm else []) + [("pembanding", "kotak", ABU)] + ([("naik-turun alami", "kotak", K_ABU)] if a_ > 0 else []), h=True)
     if a_ > 0: fig.add_vrect(x0=-a_, x1=a_, fillcolor="#8793a3", opacity=0.15, line_width=0, layer="below")      # area abu = naik-turun alami
     fig.add_vline(x=0, line_color="#555", line_width=1.2)
     fig.update_xaxes(zeroline=False, range=[min(min(v), -a_, 0) - 0.22 * span, max(max(v), a_, 0) + 0.25 * span]); fig.update_yaxes(type="category", tickfont=dict(size=10), automargin=True); return fig
@@ -513,8 +537,9 @@ def fig_kab(R):
     """Selisih (proyeksi − masa lalu model) per kab/kota; area abu = naik-turun alami; batang pucat = belum beda nyata."""
     rk = R["rk"]; d = (rk["p_kering"] - rk["kering_model_pct"]).sort_values(); a_ = float(R["amb"]) if np.isfinite(R["amb"]) else 0.0
     warna = [(MERAH if v > 0 else BIRU) if (a_ > 0 and abs(v) >= a_) else (MERAH_P if v > 0 else BIRU_P) for v in d]
-    fig = go.Figure(go.Bar(y=list(d.index), x=d.values, orientation="h", marker=dict(color=warna, line=dict(color=[MERAH if v > 0 else BIRU for v in d], width=1)), text=[n(v, 1, True) for v in d], textposition="outside", textfont_size=10, cliponaxis=False, hovertemplate="%{y}<br>selisih %{x:+.1f} bulan per 100<extra></extra>"))
+    fig = go.Figure(go.Bar(y=list(d.index), x=d.values, orientation="h", showlegend=False, marker=dict(color=warna, line=dict(color=[MERAH if v > 0 else BIRU for v in d], width=1)), text=[n(v, 1, True) for v in d], textposition="outside", textfont_size=10, cliponaxis=False, hovertemplate="%{y}<br>selisih %{x:+.1f} bulan per 100<extra></extra>"))
     if a_ > 0: fig.add_vrect(x0=-a_, x1=a_, fillcolor="#8793a3", opacity=0.15, line_width=0, layer="below")
+    _ket(fig, [("beda nyata", "kotak", K_NYATA), ("belum pasti", "kotak", K_PUCAT)] + ([("naik-turun alami", "kotak", K_ABU)] if a_ > 0 else []), h=True)
     fig.add_vline(x=0, line_color="#555", line_width=1.2); lim = max(a_ * 1.15, float(d.abs().max()) * 1.4, 3.0)
     fig.update_xaxes(range=[-lim, lim]); fig.update_yaxes(type="category", tickmode="array", tickvals=list(d.index), ticktext=list(d.index), automargin=True, tickfont=dict(size=10)); return fig
 
@@ -524,11 +549,10 @@ def peta_dari(R, mode, tinggi, lebar=400):
     if mode == "Kering": return fig_peta(a, "p_kering", 0, max(20.0, float(np.ceil(np.nanpercentile(a["p_kering"], 98) / 10) * 10)), "dari 100", KERING, tinggi, lebar)
     if mode == "Bias":
         a = a.assign(bias=a["kering_model_pct"] - a["kering_target_pct"]); lim = max(5.0, float(np.ceil(np.nanpercentile(a["bias"].abs(), 98) / 5) * 5))
-        return fig_peta(a, "bias", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, catatan="merah = model terlalu kering<br>hijau = model terlalu basah")
+        return fig_peta(a, "bias", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, legenda=[("model terlalu kering", MERAH), ("model terlalu basah", BIRU)])
     lim = max(2.5, float(np.ceil(np.nanpercentile(a["selisih"].abs(), 98) / 2.5) * 2.5))      # skala mengikuti sebaran data, supaya warna tidak menumpuk di tengah
-    kat = (f"{int(a['nyata'].sum())} dari {len(a)} kotak beda nyata<br>(pekat = nyata, pucat = belum pasti)" if a["nyata"].any()
-           else "belum ada kotak yang beda nyata<br>warna hanya menunjukkan arah")
-    return fig_peta(a, "selisih", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, mask=a["nyata"], catatan=kat)
+    kat = f"{int(a['nyata'].sum())} dari {len(a)} kotak beda nyata" if a["nyata"].any() else "belum ada kotak yang beda nyata<br>warna hanya menunjukkan arah"
+    return fig_peta(a, "selisih", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, mask=a["nyata"], catatan=kat, legenda=[("beda nyata", K_NYATA), ("belum pasti", K_PUCAT)])
 
 
 # ------------------------------------------------------------------ teks "cara membaca" dan "kesimpulan" (menyesuaikan pilihan pengguna)
@@ -765,15 +789,15 @@ def halaman_laporan():
         Rk = ringkas(s_, PRESET["Sepanjang tahun"], th_all[0], th_all[-1])
         if Rk: rows.append({"Jangka": NAMA_SKALA_PANJANG.get(s_, s_), "Masa lalu (model)": n(Rk["base"]), "Pengamatan": n(Rk["ref"]), f"Proyeksi {H0}-{H1}": n(Rk["proy"]), "Selisih": n(Rk["sel"], 1, True), "Naik-turun alami (±)": n(Rk["amb"]), "Tafsir": f'{SIM[Rk["kode"]]} {KATA[Rk["kode"]]}'})
     st.table(pd.DataFrame(rows).set_index("Jangka")); cara("Satuan: bulan kering dari 100 bulan. 'Naik-turun alami' = 2 × galat baku antar-tahun; selisih yang lebih kecil darinya belum bisa dipastikan.")
-    st.markdown(f"**Peta: selisih frekuensi bulan kering terhadap masa lalu ({NAMA_SKALA_PANJANG.get(sk, sk)})**"); gambar(peta_dari(R, "Selisih", 400, 800), 400, tetap=True)
+    st.markdown(f"**Peta: selisih frekuensi bulan kering terhadap masa lalu ({NAMA_SKALA_PANJANG.get(sk, sk)})**"); gambar(peta_dari(R, "Selisih", 400, 800), 400, tetap=True, legenda=True, leg_pos="dalam")
     cara2("peta")
-    st.markdown("**Per tahun**"); gambar(fig_tahun(R), 250); cara2("blok")
-    st.markdown("**Selisih per bulan**"); gambar(fig_bulan(R), 230)
+    st.markdown("**Per tahun**"); gambar(fig_tahun(R), 250, legenda=True); cara2("blok")
+    st.markdown("**Selisih per bulan**"); gambar(fig_bulan(R), 230, legenda=True)
     cara2("bulan")
     if len(sm) >= 2:
-        st.markdown("**Apakah hasilnya tergantung pada model?**"); gambar(fig_model(sm, amb=R["amb"]), 230)
+        st.markdown("**Apakah hasilnya tergantung pada model?**"); gambar(fig_model(sm, amb=R["amb"]), 230, legenda=True)
         cara2("model")
-    if len(R["rk"]): st.markdown("**Per kabupaten/kota**"); gambar(fig_kab(R), 230); cara2("kab")
+    if len(R["rk"]): st.markdown("**Per kabupaten/kota**"); gambar(fig_kab(R), 230, legenda=True); cara2("kab")
 
     ts = teks_deret(sk)
     if ts: st.markdown(f"**Deret SPI bulanan {H0}-{H1} ({NAMA_SKALA_PANJANG.get(sk, sk)})**"); gambar(fig_deret(sk), 260, legenda=True); st.markdown(f'<div class="cara"><b>Cara membaca:</b> {ts[0]}</div><div class="kes"><b>Kesimpulan:</b> {ts[1]}</div>', unsafe_allow_html=True)
@@ -828,14 +852,14 @@ iframe(kh, int((H_KPI + H_BAN) * FSKALA))
 
 col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
 with col_peta:
-    gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA), H_PETA, tetap=True, judul={"Selisih": "Peta · selisih vs masa lalu · pekat = nyata, pucat = belum pasti", "Kering": "Peta · bulan kering per 100 bulan", "Bias": "Peta · bias masa lalu: model − nyata (bln/100)"}[mode])
+    gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA), H_PETA, tetap=True, judul={"Selisih": "Peta · selisih vs masa lalu", "Kering": "Peta · bulan kering per 100 bulan", "Bias": "Peta · bias masa lalu: model − nyata (bln/100)"}[mode], legenda=True, leg_pos="dalam")
 with col_b:
-    gambar(fig_tahun(R), H_KECIL, judul="Per tahun · garis gelap = rata-rata 5 tahun · putus = masa lalu")
-    gambar(fig_bulan(R), H_KECIL, judul="Per bulan · pekat = beda nyata · pucat = belum pasti")
+    gambar(fig_tahun(R), H_KECIL, judul="Per tahun", legenda=True)
+    gambar(fig_bulan(R), H_KECIL, judul="Per bulan", legenda=True)
 with col_c:
-    if len(R["rk"]): gambar(fig_kab(R), H_KECIL, judul="Per kab/kota · selisih · area abu = naik-turun alami")
+    if len(R["rk"]): gambar(fig_kab(R), H_KECIL, judul="Per kab/kota", legenda=True)
     else: st.caption("Batas kab/kota belum tersedia.")
-    if len(sm) >= 2: gambar(fig_model(sm, compact=True, amb=R["amb"]), H_KECIL, judul=("Per model · ★ = dipakai · area abu = naik-turun alami" if len(R["bulan"]) == 12 else "Per model · seluruh bulan (tak ikut musim) · ★ = dipakai"))
+    if len(sm) >= 2: gambar(fig_model(sm, compact=True, amb=R["amb"]), H_KECIL, judul=("Per model" if len(R["bulan"]) == 12 else "Per model · semua bulan"), legenda=True)
     else: st.caption("Data perbandingan model belum ada.")
 
 # ------------------------------------------------------------------ baris bawah: ringkasan tiga jangka (satu baris kartu)
