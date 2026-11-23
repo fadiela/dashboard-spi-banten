@@ -216,11 +216,15 @@ with c1:
 with c2:
     st.subheader("Apa arti hasil validasi?")
     st.markdown(
-        f"- Model statistik: **{valid.get('model', model_name)}**.\n"
-        f"- Jalur prediktor: **{valid.get('jalur_prediktor', '—')}**.\n"
-        f"- Penyesuaian tren: **{valid.get('detrend', '—')}**.\n"
-        f"- Harmonisasi: **{valid.get('harmonisasi', '—')}**.\n"
-        f"- Hold-out yang tercatat: **{(meta.get('holdout') or {}).get('periode', ['—', '—'])[0]}–{(meta.get('holdout') or {}).get('periode', ['—', '—'])[1]}**."
+        f"- Model statistik: **{valid.get('model', model_name)}**.\\n"
+        f"- Jalur prediktor: **{valid.get('jalur_prediktor', '—')}**; penyesuaian tren: **{valid.get('detrend', '—')}**; harmonisasi: **{valid.get('harmonisasi', '—')}**.\\n"
+        f"- Data historis pengembangan: **1981–2020**. Hold-out tercatat: **{(meta.get('holdout') or {}).get('periode', ['—', '—'])[0]}–{(meta.get('holdout') or {}).get('periode', ['—', '—'])[1]}**."
+    )
+    st.markdown(
+        '<div class="section-note"><b>Alur singkat:</b> ERA5 digunakan sebagai prediktor pada tahap validasi historis, '
+        'sedangkan CHIRPS menjadi target curah hujan. Model statistik terpilih kemudian diterapkan pada prediktor '
+        'CMCC-ESM2 untuk menghasilkan masukan curah hujan proyeksi yang selanjutnya dihitung menjadi SPI.</div>',
+        unsafe_allow_html=True,
     )
     st.markdown(
         '<div class="warning-note"><b>Catatan interpretasi:</b> CRPSS pada prediktor GCM bernilai negatif '
@@ -375,16 +379,16 @@ if regional is not None and {"SPI", "tahun", "bulan", "spi_median", "spi_p10", "
 # 3. Catatan interpretasi dan keterbatasan
 st.divider()
 st.header("3. Catatan interpretasi dan keterbatasan")
-limitations = meta.get("catatan") or []
-if limitations:
-    for item in limitations:
-        st.markdown(f"- {item}")
-else:
-    st.markdown(
-        "- Hasil hanya menggunakan satu GCM dan satu skenario.\n"
-        "- Proyeksi bukan ramalan kejadian cuaca pada tahun tertentu.\n"
-        "- Ketidakpastian model dan skenario lain belum tercakup."
-    )
+limitations = [
+    "Analisis proyeksi hanya menggunakan CMCC-ESM2 dengan satu skenario SSP370; ketidakpastian antar-GCM dan antar-skenario belum tercakup.",
+    "GCM berjalan bebas (free-running), sehingga tahun kering pada simulasi tidak menunjukkan kejadian kering yang akan terjadi pada tahun kalender tersebut.",
+    "CRPSS pada prediktor GCM lebih rendah daripada klimatologi pada hasil yang tersimpan; skill validasi ERA5 tidak otomatis berpindah ke prediktor GCM.",
+    "Frekuensi bulan kering model pada periode historis berbeda dari CHIRPS. Karena itu perubahan proyeksi dibaca relatif terhadap baseline model sendiri, bukan sebagai angka mutlak.",
+    "Pola spasial mengikuti grid model yang kasar. Grid sekitar 5 km bukan berarti GCM memiliki resolusi asli 5 km.",
+    "Hold-out 2021–2025 telah dilihat berulang selama pengembangan dan bukan uji independen."
+]
+for item in limitations:
+    st.markdown(f"- {item}")
 
 st.markdown(
     f'<div class="warning-note"><b>Kesimpulan pembacaan:</b> hasil SPI merupakan keluaran lanjutan '
