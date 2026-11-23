@@ -9,6 +9,10 @@ Ukuran layar: komponen ukuran_layar/ melaporkan tinggi dan lebar jendela, sehing
 Uji beda nyata: bila dashboard_uji.csv (notebook 14j) ada dan rentang tahun = seluruh horizon, dipakai uji formal (block bootstrap); selain itu pendekatan cepat 2 x galat baku.
 Warna SPI: kelas dan warna mengikuti legenda peta SPI BMKG (SPI_KELAS di bawah).
 
+Peta (v-sebelum-sesudah):
+  - hanya satu peta: selisih proyeksi - masa lalu (pilihan Kering dan Bias dihapus)
+  - pilihan Downscaling: "Sesudah (5 km)" = grid hasil downscaling; "Sebelum (GCM)" = sel GCM kasar dari hujan GCM mentah (berkas dashboard_gcm_sel.csv.gz dari notebook sel 14k). Skala warna keduanya sama
+
 Perubahan legenda (v-legenda):
   - judul panel hanya berisi nama panel; arti garis/warna (gelap = rata-rata 5 tahun, putus = masa lalu, pekat = beda nyata, pucat = belum pasti, area abu = naik-turun alami, ★ = dipakai) pindah ke legenda grafik
   - warna chip "lebih jarang kering" disamakan menjadi hijau BMKG (#37a800), sama dengan batang, peta, dan kartu 3 jangka
@@ -39,7 +43,7 @@ H_KECIL = 140                       # tinggi tiap grafik kecil (px); 2 baris gra
 H_SUM = 100                         # tinggi baris kartu ringkasan 3 jangka (px)
 UKURAN_TEKS, UKURAN_TEKS_LAPORAN = 15, 15
 PETA_STYLE = "carto-positron-nolabels"   # peta dasar tanpa nama kota di luar Banten (perlu plotly>=6)
-PETA_AWAL = "Selisih"               # tampilan awal peta: "Selisih" atau "Kering"
+PETA_AWAL = "Sesudah"               # tampilan awal peta: "Sesudah" (grid 5 km, setelah downscaling) atau "Sebelum" (sel GCM mentah, sebelum downscaling)
 
 # [INTEGRASI] EMBED=True bila file ini dijalankan dari app.py utama (halaman 3); header, filter gelap, dan tema ikut app.py.
 # Dijalankan sendiri (streamlit run app_dashboard_spi.py) tampilannya tetap seperti semula, termasuk ?laporan=1.
@@ -172,7 +176,7 @@ def jalur(nama):
 def muat(ver):
     d = {"meta": json.load(open(jalur("dashboard_meta.json"), encoding="utf-8"))}
     for k, nm in [("b_grid", "dashboard_bulanan_per_grid.csv.gz"), ("b_base", "dashboard_baseline_bulan_grid.csv.gz"), ("grid", "dashboard_grid.csv"),
-                  ("banding", "dashboard_model_banding.csv"), ("gerb", "dashboard_model_gerbang.csv"), ("reg", "dashboard_bulanan_regional.csv.gz"), ("sens", "dashboard_sensitivitas.csv"), ("kor", "dashboard_korelasi.csv"), ("uji", "dashboard_uji.csv")]:
+                  ("banding", "dashboard_model_banding.csv"), ("gerb", "dashboard_model_gerbang.csv"), ("reg", "dashboard_bulanan_regional.csv.gz"), ("sens", "dashboard_sensitivitas.csv"), ("kor", "dashboard_korelasi.csv"), ("uji", "dashboard_uji.csv"), ("gcm", "dashboard_gcm_sel.csv.gz")]:
         d[k] = pd.read_csv(jalur(nm)) if os.path.exists(jalur(nm)) else None
     d["gj"] = json.load(open(jalur("banten_kabkota.geojson"), encoding="utf-8")) if os.path.exists(jalur("banten_kabkota.geojson")) else None
     return d
@@ -258,8 +262,9 @@ def batas_peta(xs, ys, h):
     return w - px, e + px, so - py, u + py
 
 
-def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, mask=None, catatan=None, legenda=None):
+def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, mask=None, catatan=None, legenda=None, sel=None):
     """mask (Series bool): kotak True = beda nyata (warna pekat); kotak lain lebih pucat tetapi tetap berwarna sesuai arah. Peta dikunci: tidak bisa digeser/diperbesar.
+    sel (DataFrame sel_gcm, lon_w, lon_e, lat_s, lat_n, selisih): bila diberikan, yang digambar adalah sel GCM kasar (sebelum downscaling), bukan grid 5 km; df tetap dipakai untuk pusat dan zoom peta.
     legenda: [(nama, warna)] -> entri legenda (penanda bulat tanpa data); arti pekat/pucat/merah/hijau dijelaskan di legenda, bukan di judul."""
     xs, ys = np.unique(df["lon"].round(4)), np.unique(df["lat"].round(4)); h = float(np.median(np.diff(xs)) / 2) if len(xs) > 1 else 0.025
 
@@ -268,8 +273,14 @@ def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, m
         return go.Choroplethmap(geojson=kotak, locations=d["grid_id"].astype(int).astype(str), z=d[kol], text=d["wilayah"].fillna("Di luar batas kab/kota"), colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid, showscale=bar, showlegend=False,
                                 marker=dict(opacity=op, line=dict(width=0)), colorbar=dict(title=dict(text=satuan, font=dict(size=10), side="top"), thickness=9, len=0.5, tickfont=dict(size=10), x=0.995),
                                 hovertemplate="<b>%{text}</b><br>%{z:.1f} " + satuan + "<extra></extra>")
+    def trace_sel(d):
+        kotak = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": str(int(g)), "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[w, so], [e, so], [e, u], [w, u], [w, so]]]}} for g, w, e, so, u in zip(d["sel_gcm"], d["lon_w"], d["lon_e"], d["lat_s"], d["lat_n"])]}
+        return go.Choroplethmap(geojson=kotak, locations=d["sel_gcm"].astype(int).astype(str), z=d[kol], text=[f"Sel GCM {int(g)}" for g in d["sel_gcm"]], colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid, showscale=True, showlegend=False,
+                                marker=dict(opacity=0.88, line=dict(width=1.2, color="#33474a")), colorbar=dict(title=dict(text=satuan, font=dict(size=10), side="top"), thickness=9, len=0.5, tickfont=dict(size=10), x=0.995),
+                                hovertemplate="<b>%{text}</b><br>%{z:+.1f} " + satuan + "<extra></extra>")
     fig = go.Figure()
-    if mask is None: fig.add_trace(trace(df, 0.88, True))
+    if sel is not None: fig.add_trace(trace_sel(sel))
+    elif mask is None: fig.add_trace(trace(df, 0.88, True))
     elif not bool(mask.any()): fig.add_trace(trace(df, 0.82, True))
     else: fig.add_trace(trace(df, 0.62, True)); fig.add_trace(trace(df[mask.to_numpy()], 0.95, False))
     for nm_, wr_ in (legenda or []): fig.add_trace(go.Scattermap(lon=[None], lat=[None], mode="markers", marker=dict(size=11, color=wr_), name=nm_, showlegend=True, hoverinfo="skip"))
@@ -544,13 +555,27 @@ def fig_kab(R):
     fig.update_xaxes(range=[-lim, lim]); fig.update_yaxes(type="category", tickmode="array", tickvals=list(d.index), ticktext=list(d.index), automargin=True, tickfont=dict(size=10)); return fig
 
 
-def peta_dari(R, mode, tinggi, lebar=400):
+def selisih_gcm(skala, bulan, t0, t1):
+    """Selisih per sel GCM kasar (sebelum downscaling): % bulan SPI <= -1 pada t0-t1 dikurangi 1981-2010, dihitung dari hujan GCM mentah (SPI memakai acuan Gamma GCM sendiri).
+    Butuh dashboard_gcm_sel.csv.gz (notebook sel 14k). None bila berkas belum ada."""
+    S = D.get("gcm")
+    if S is None or not {"sel_gcm", "lon_w", "lon_e", "lat_s", "lat_n", "SPI", "tahun", "bulan", "kering"} <= set(S.columns): return None
+    S = S[(S["SPI"] == skala) & S["bulan"].isin(bulan)]
+    if S.empty: return None
+    base = S[S["tahun"].between(1981, 2010)].groupby("sel_gcm")["kering"].mean().mul(100).rename("base")
+    proy = S[S["tahun"].between(t0, t1)].groupby("sel_gcm")["kering"].mean().mul(100).rename("proy")
+    out = S.groupby("sel_gcm")[["lon_w", "lon_e", "lat_s", "lat_n"]].first().join(base).join(proy).dropna()
+    out["selisih"] = out["proy"] - out["base"]
+    return out.reset_index() if len(out) else None
+
+
+def peta_dari(R, mode, tinggi, lebar=400, G=None):
+    """Satu peta: selisih proyeksi - masa lalu. mode "Sesudah" = grid 5 km (hasil downscaling); "Sebelum" = sel GCM kasar (G dari selisih_gcm). Skala warna dibuat sama agar keduanya sebanding."""
     a = R["agg"]
-    if mode == "Kering": return fig_peta(a, "p_kering", 0, max(20.0, float(np.ceil(np.nanpercentile(a["p_kering"], 98) / 10) * 10)), "dari 100", KERING, tinggi, lebar)
-    if mode == "Bias":
-        a = a.assign(bias=a["kering_model_pct"] - a["kering_target_pct"]); lim = max(5.0, float(np.ceil(np.nanpercentile(a["bias"].abs(), 98) / 5) * 5))
-        return fig_peta(a, "bias", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, legenda=[("model terlalu kering", MERAH), ("model terlalu basah", BIRU)])
     lim = max(2.5, float(np.ceil(np.nanpercentile(a["selisih"].abs(), 98) / 2.5) * 2.5))      # skala mengikuti sebaran data, supaya warna tidak menumpuk di tengah
+    if G is not None: lim = max(lim, float(np.ceil(G["selisih"].abs().max() / 2.5) * 2.5))
+    if mode == "Sebelum" and G is not None:
+        return fig_peta(a, "selisih", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, sel=G, catatan=f"{len(G)} sel GCM, hujan GCM mentah<br>sebelum downscaling")
     kat = f"{int(a['nyata'].sum())} dari {len(a)} kotak beda nyata" if a["nyata"].any() else "belum ada kotak yang beda nyata<br>warna hanya menunjukkan arah"
     return fig_peta(a, "selisih", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, mask=a["nyata"], catatan=kat, legenda=[("beda nyata", K_NYATA), ("belum pasti", K_PUCAT)])
 
@@ -581,17 +606,13 @@ def teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, mode):
                   f"Syarat terpenuhi: <b>{n_ok} dari 6</b> (daftar periksa, bukan skor statistik)." + (" Belum terpenuhi: " + "; ".join(gagal) + "." if gagal else ""))
     # peta
     a, rk = R["agg"], R["rk"]
-    if mode == "Kering":
-        cara_p = f"Tiap kotak = satu grid sekitar 5 km. Makin gelap, makin sering kering (bulan per 100) pada {R['t0']}-{R['t1']}. Garis hitam = batas kabupaten/kota."
-        kes_p = (f"Paling sering kering: <b>{rk.index[-1]}</b> ({n(rk['p_kering'].iloc[-1], 0)} dari 100 bulan); paling jarang: <b>{rk.index[0]}</b> ({n(rk['p_kering'].iloc[0], 0)}). " if len(rk) else "") + "Pola antar-grid sebagian besar mengikuti klimatologi pengamatan, bukan sinyal baru dari model iklim."
-    else:
-        cara_p = "Warna = proyeksi dikurangi masa lalu model per grid. Merah = lebih sering kering, hijau = lebih jarang, kuning pucat = tidak berubah (warna mengikuti legenda SPI BMKG). Garis hitam = batas kabupaten/kota."
-        if len(a) and "wilayah" in a and a["wilayah"].notna().any():
-            pos = float((a["selisih"] > 0).mean() * 100); rs = a.groupby("wilayah")["selisih"].mean(); rs.index = nama_pendek(rs.index.tolist())
-            kes_p = f"{n(pos, 0)}% grid berwarna merah-oranye (naik) dan {n(100 - pos, 0)}% hijau (turun). Selisih rata-rata tertinggi di <b>{rs.idxmax()}</b> ({n(rs.max(), 1, True)}), terendah di <b>{rs.idxmin()}</b> ({n(rs.min(), 1, True)}). Baca sebagai kecenderungan wilayah, bukan angka pasti tiap kotak."
-        else: kes_p = "Baca sebagai kecenderungan wilayah, bukan angka pasti tiap kotak."
-    T["peta"] = (f"Peta ({'bulan kering per 100' if mode == 'Kering' else 'selisih vs masa lalu'})", cara_p, kes_p)
-    if mode != "Kering" and "nyata" in a:
+    cara_p = "Warna = proyeksi dikurangi masa lalu model per grid. Merah = lebih sering kering, hijau = lebih jarang, kuning pucat = tidak berubah (warna mengikuti legenda SPI BMKG). Garis hitam = batas kabupaten/kota."
+    if len(a) and "wilayah" in a and a["wilayah"].notna().any():
+        pos = float((a["selisih"] > 0).mean() * 100); rs = a.groupby("wilayah")["selisih"].mean(); rs.index = nama_pendek(rs.index.tolist())
+        kes_p = f"{n(pos, 0)}% grid berwarna merah-oranye (naik) dan {n(100 - pos, 0)}% hijau (turun). Selisih rata-rata tertinggi di <b>{rs.idxmax()}</b> ({n(rs.max(), 1, True)}), terendah di <b>{rs.idxmin()}</b> ({n(rs.min(), 1, True)}). Baca sebagai kecenderungan wilayah, bukan angka pasti tiap kotak."
+    else: kes_p = "Baca sebagai kecenderungan wilayah, bukan angka pasti tiap kotak."
+    T["peta"] = ("Peta (selisih vs masa lalu)", cara_p, kes_p)
+    if "nyata" in a:
         T["peta"] = (T["peta"][0], T["peta"][1] + " Warna pucat = selisih kotak itu belum melampaui naik-turun alaminya sendiri; warna pekat = beda nyata.", T["peta"][2] + f" Kotak yang beda nyata: <b>{int(a['nyata'].sum())} dari {len(a)}</b>. Pola kotak sebagian mengikuti sel GCM yang kasar (hanya 4 sel menutupi Banten), bukan detail 5 km.")
     # per tahun
     yr = R["per_th"]; mv = yr.rolling(5, center=True, min_periods=3).mean().dropna(); b10, se10 = tren_tahun(yr)
@@ -789,7 +810,8 @@ def halaman_laporan():
         Rk = ringkas(s_, PRESET["Sepanjang tahun"], th_all[0], th_all[-1])
         if Rk: rows.append({"Jangka": NAMA_SKALA_PANJANG.get(s_, s_), "Masa lalu (model)": n(Rk["base"]), "Pengamatan": n(Rk["ref"]), f"Proyeksi {H0}-{H1}": n(Rk["proy"]), "Selisih": n(Rk["sel"], 1, True), "Naik-turun alami (±)": n(Rk["amb"]), "Tafsir": f'{SIM[Rk["kode"]]} {KATA[Rk["kode"]]}'})
     st.table(pd.DataFrame(rows).set_index("Jangka")); cara("Satuan: bulan kering dari 100 bulan. 'Naik-turun alami' = 2 × galat baku antar-tahun; selisih yang lebih kecil darinya belum bisa dipastikan.")
-    st.markdown(f"**Peta: selisih frekuensi bulan kering terhadap masa lalu ({NAMA_SKALA_PANJANG.get(sk, sk)})**"); gambar(peta_dari(R, "Selisih", 400, 800), 400, tetap=True, legenda=True, leg_pos="dalam")
+    st.markdown(f"**Peta: selisih frekuensi bulan kering terhadap masa lalu ({NAMA_SKALA_PANJANG.get(sk, sk)})**"); Gl = selisih_gcm(sk, PRESET["Sepanjang tahun"], th_all[0], th_all[-1]); gambar(peta_dari(R, "Sesudah", 400, 800, G=Gl), 400, tetap=True, legenda=True, leg_pos="dalam")
+    if Gl is not None: st.markdown("**Pembanding: sebelum downscaling (sel GCM kasar, skala warna sama)**"); gambar(peta_dari(R, "Sebelum", 400, 800, G=Gl), 400, tetap=True)
     cara2("peta")
     st.markdown("**Per tahun**"); gambar(fig_tahun(R), 250, legenda=True); cara2("blok")
     st.markdown("**Selisih per bulan**"); gambar(fig_bulan(R), 230, legenda=True)
@@ -840,7 +862,7 @@ else: c_t, c_s, c_m, c_y, c_p, c_f = st.columns([3.0, 1.9, 1.2, 1.5, 1.9, 1.05],
 with c_s: skala = pilih(list(meta["spi_skala"]), "p3_skala", "Jangka", fmt=lambda s: NAMA_SKALA.get(s, s))
 with c_m: musim = st.selectbox("Musim", list(PRESET), key="p3_musim")
 with c_y: t0, t1 = st.select_slider("Tahun", th_all, value=(th_all[0], th_all[-1]), key="p3_tahun")
-with c_p: mode = pilih(["Selisih", "Kering", "Bias"], "p3_peta", "Peta", default=PETA_AWAL)
+with c_p: mode = pilih(["Sesudah", "Sebelum"], "p3_peta2", "Downscaling", default=PETA_AWAL, fmt=lambda m: {"Sesudah": "Sesudah (5 km)", "Sebelum": "Sebelum (GCM)"}[m])
 with c_f: iframe(LAYAR_PENUH, 52)
 if not EMBED: c_t.markdown(f'<div class="ttl">{JUDUL_PROYEK}</div><div class="sub">{meta.get("gcm")} · {meta.get("skenario")} · periode {t0}-{t1} · vs 1981-2010 · kering = SPI ≤ −1</div>', unsafe_allow_html=True)
 
@@ -852,7 +874,9 @@ iframe(kh, int((H_KPI + H_BAN) * FSKALA))
 
 col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
 with col_peta:
-    gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA), H_PETA, tetap=True, judul={"Selisih": "Peta · selisih vs masa lalu", "Kering": "Peta · bulan kering per 100 bulan", "Bias": "Peta · bias masa lalu: model − nyata (bln/100)"}[mode], legenda=True, leg_pos="dalam")
+    G_ = selisih_gcm(skala, PRESET[musim], t0, t1)
+    if mode == "Sebelum" and G_ is None: st.caption("Data sel GCM (dashboard_gcm_sel.csv.gz, notebook sel 14k) belum ada; peta sesudah downscaling ditampilkan."); mode = "Sesudah"
+    gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA, G=G_), H_PETA, tetap=True, judul={"Sesudah": "Peta · selisih · sesudah downscaling (5 km)", "Sebelum": "Peta · selisih · sebelum downscaling (sel GCM)"}[mode], legenda=True, leg_pos="dalam")
 with col_b:
     gambar(fig_tahun(R), H_KECIL, judul="Per tahun", legenda=True)
     gambar(fig_bulan(R), H_KECIL, judul="Per bulan", legenda=True)
