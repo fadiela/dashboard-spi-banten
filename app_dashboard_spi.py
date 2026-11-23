@@ -42,6 +42,7 @@ H_BAN = 64                          # tinggi banner kesimpulan di atas kartu (px
 H_KECIL = 140                       # tinggi tiap grafik kecil (px); 2 baris grafik + banner + kartu muat di layar 1366x768 (bisa diubah lewat ?tinggi=)
 H_SUM = 100                         # tinggi baris kartu ringkasan 3 jangka (px)
 UKURAN_TEKS, UKURAN_TEKS_LAPORAN = 15, 15
+LABEL_WILAYAH = "hover"               # nama kab/kota di peta: "hover" = titik kecil, nama muncul saat kursor diarahkan (interaktif); "teks" = tulisan tetap
 PETA_STYLE = "carto-positron-nolabels"   # peta dasar tanpa nama kota di luar Banten (perlu plotly>=6)
 PETA_AWAL = "Sesudah"               # tampilan awal peta: "Sesudah" (grid 5 km, setelah downscaling) atau "Sebelum" (sel GCM mentah, sebelum downscaling)
 
@@ -268,11 +269,21 @@ def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, m
     legenda: [(nama, warna)] -> entri legenda (penanda bulat tanpa data); arti pekat/pucat/merah/hijau dijelaskan di legenda, bukan di judul."""
     xs, ys = np.unique(df["lon"].round(4)), np.unique(df["lat"].round(4)); h = float(np.median(np.diff(xs)) / 2) if len(xs) > 1 else 0.025
 
+    wmean = df.groupby("wilayah")[kol].mean() if "wilayah" in df and df["wilayah"].notna().any() else None
+    def hov(d):
+        t_ = []
+        for i_, w_, z_ in zip(d.index, d["wilayah"], d[kol]):
+            br = w_ if isinstance(w_, str) else "Di luar batas kab/kota"
+            t = f"<b>{br}</b><br>kotak ini: {n(z_, 1, zmid is not None)} {satuan}"
+            if wmean is not None and isinstance(w_, str): t += f"<br>rata-rata wilayah: {n(wmean[w_], 1, zmid is not None)} {satuan}"
+            if mask is not None and i_ in mask.index: t += "<br>" + ("<b>beda nyata</b>" if bool(mask.loc[i_]) else "belum pasti")
+            t_.append(t)
+        return t_
     def trace(d, op, bar):
         kotak = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": str(int(g)), "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[lo - h, la - h], [lo + h, la - h], [lo + h, la + h], [lo - h, la + h], [lo - h, la - h]]]}} for g, lo, la in zip(d["grid_id"], d["lon"], d["lat"])]}
-        return go.Choroplethmap(geojson=kotak, locations=d["grid_id"].astype(int).astype(str), z=d[kol], text=d["wilayah"].fillna("Di luar batas kab/kota"), colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid, showscale=bar, showlegend=False,
+        return go.Choroplethmap(geojson=kotak, locations=d["grid_id"].astype(int).astype(str), z=d[kol], text=hov(d), colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid, showscale=bar, showlegend=False,
                                 marker=dict(opacity=op, line=dict(width=0)), colorbar=dict(title=dict(text=satuan, font=dict(size=10), side="top"), thickness=9, len=0.5, tickfont=dict(size=10), x=0.995),
-                                hovertemplate="<b>%{text}</b><br>%{z:.1f} " + satuan + "<extra></extra>")
+                                hovertemplate="%{text}<extra></extra>")
     def trace_sel(d):
         kotak = {"type": "FeatureCollection", "features": [{"type": "Feature", "id": str(int(g)), "properties": {}, "geometry": {"type": "Polygon", "coordinates": [[[w, so], [e, so], [e, u], [w, u], [w, so]]]}} for g, w, e, so, u in zip(d["sel_gcm"], d["lon_w"], d["lon_e"], d["lat_s"], d["lat_n"])]}
         return go.Choroplethmap(geojson=kotak, locations=d["sel_gcm"].astype(int).astype(str), z=d[kol], text=[f"Sel GCM {int(g)}" for g in d["sel_gcm"]], colorscale=warna, zmin=zmin, zmax=zmax, zmid=zmid, showscale=True, showlegend=False,
@@ -283,14 +294,18 @@ def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, m
     elif mask is None: fig.add_trace(trace(df, 0.88, True))
     elif not bool(mask.any()): fig.add_trace(trace(df, 0.82, True))
     else: fig.add_trace(trace(df, 0.62, True)); fig.add_trace(trace(df[mask.to_numpy()], 0.95, False))
-    for nm_, wr_ in (legenda or []): fig.add_trace(go.Scattermap(lon=[None], lat=[None], mode="markers", marker=dict(size=11, color=wr_), name=nm_, showlegend=True, hoverinfo="skip"))
+    for nm_, wr_ in (legenda or []): fig.add_trace(go.Scattermap(lon=[None], lat=[None], mode="markers", marker=dict(size=11, color=wr_), name=nm_, showlegend=True, hoverinfo="skip"))      # warna transparan = hanya teks HTML berwarna di nama
     lon_r, lat_r = max(xs.max() - xs.min() + 2 * h, 0.2) * 1.08, max(ys.max() - ys.min() + 2 * h, 0.2) * 1.08 / np.cos(np.radians(float(ys.mean())))
     zoom = float(np.clip(min(np.log2(360 * lebar / (512 * lon_r)), np.log2(360 * tinggi / (512 * lat_r))), 5, 11))      # 512 px/tile (MapLibre)
     lay = dict(style=PETA_STYLE, center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom)
     if gj is not None: lay["layers"] = [dict(sourcetype="geojson", source=gj, type="line", color="#33474a", line=dict(width=1.3), below="")]
     w_, e_, s_, u_ = batas_peta(xs, ys, h); lay["bounds"] = dict(west=float(w_), east=float(e_), south=float(s_), north=float(u_))      # pas ke seluruh grid dan batas wilayah
     fig.update_layout(map=lay, dragmode=False)       # dragmode=False: tidak bisa digeser
-    if len(LAB): fig.add_trace(go.Scattermap(lon=LAB["lon"], lat=LAB["lat"], mode="text", text=LAB["nama"], textfont=dict(size=10, color="#10243b"), hoverinfo="skip", showlegend=False))
+    if len(LAB) and LABEL_WILAYAH == "teks": fig.add_trace(go.Scattermap(lon=LAB["lon"], lat=LAB["lat"], mode="text", text=LAB["nama"], textfont=dict(size=10, color="#10243b"), hoverinfo="skip", showlegend=False))
+    elif len(LAB):      # interaktif: titik kecil di tiap kab/kota; nama dan ringkasan muncul saat kursor diarahkan (peta tetap bersih)
+        wm = {} if (wmean is None or sel is not None) else dict(zip(nama_pendek(wmean.index.tolist()), wmean.values))
+        info = [f"<b>{nm}</b>" + (f"<br>rata-rata wilayah: {n(wm[nm], 1, zmid is not None)} {satuan}" if nm in wm else "") for nm in LAB["nama"]]
+        fig.add_trace(go.Scattermap(lon=LAB["lon"], lat=LAB["lat"], mode="markers", marker=dict(size=10, color="white", opacity=0.95), text=info, hovertemplate="%{text}<extra></extra>", showlegend=False))
     if catatan: fig.add_annotation(text=catatan, xref="paper", yref="paper", x=0.01, y=0.99, xanchor="left", yanchor="top", showarrow=False, align="left", font=dict(size=10.5, color="#44566c"), bgcolor="rgba(255,255,255,.88)", borderpad=3)
     return fig
 
@@ -505,11 +520,16 @@ def _ket(fig, items, h=False):
     """Entri legenda tanpa data. item = (nama, "kotak"|"garis", warna[, dash]). Penjelasan gaya (gelap, putus, pekat, pucat, area abu) ada di legenda, bukan di judul panel."""
     for it in items:
         nm_, jn_, wr_ = it[:3]
-        if jn_ == "kotak": fig.add_trace(go.Bar(x=[None], y=[None], orientation="h" if h else "v", name=nm_, marker=dict(color=wr_), showlegend=True, hoverinfo="skip"))
+        if jn_ == "teks": fig.add_trace(go.Bar(x=[None], y=[None], orientation="h" if h else "v", name=nm_, marker=dict(color=TRANSPARAN), showlegend=True, hoverinfo="skip"))      # nama berisi kotak berwarna (HTML); swatch bawaan dibuat transparan
+        elif jn_ == "kotak": fig.add_trace(go.Bar(x=[None], y=[None], orientation="h" if h else "v", name=nm_, marker=dict(color=wr_), showlegend=True, hoverinfo="skip"))
         else: fig.add_trace(go.Scatter(x=[None], y=[None], mode="lines", name=nm_, line=dict(color=wr_, width=2.5, dash=it[3] if len(it) > 3 else "solid"), showlegend=True, hoverinfo="skip"))
 
 
-K_NYATA, K_PUCAT, K_ABU = "#5b6b7f", "rgba(91,107,127,.35)", "rgba(135,147,163,.35)"      # swatch legenda: pekat = beda nyata, pucat = belum pasti, abu = naik-turun alami
+K_ABU, TRANSPARAN = "rgba(135,147,163,.35)", "rgba(0,0,0,0)"      # abu = area naik-turun alami (memang abu di grafik)
+# Pekat/pucat bukan warna sendiri, melainkan KEPEKATAN warna arah (merah = lebih sering kering, hijau = lebih jarang). Legenda memakai kotak merah+hijau pada kepekatan yang sama dengan grafik.
+NM_NYATA = '<span style="color:#e60000">■</span><span style="color:#37a800">■</span> beda nyata'
+NM_PUCAT = '<span style="color:#f59494">■</span><span style="color:#abda94">■</span> belum pasti'
+NM_LUAR = '<span style="color:#f9c9c9">■</span><span style="color:#cfe8bf">■</span> di luar musim'
 
 
 def fig_tahun(R):
@@ -528,7 +548,7 @@ def fig_bulan(R):
     warna = [(MERAH if v > 0 else BIRU) if nn else (MERAH_P if v > 0 else BIRU_P) for v, nn in zip(d.values, ny.values)]
     fig = go.Figure(go.Bar(x=[BLN[m - 1] for m in d.index], y=d.values, showlegend=False, marker=dict(color=warna, opacity=[1 if p else 0.45 for p in pilih_], line=dict(color=[MERAH if v > 0 else BIRU for v in d.values], width=1)), customdata=np.where(ny.values, "beda nyata", "belum pasti"),
                            hovertemplate="%{x}<br>selisih %{y:+.1f} bulan per 100 (%{customdata})<extra></extra>"))
-    _ket(fig, [("beda nyata", "kotak", K_NYATA), ("belum pasti", "kotak", K_PUCAT)] + ([("di luar musim", "kotak", "rgba(91,107,127,.15)")] if not all(pilih_) else []))
+    _ket(fig, [(NM_NYATA, "teks", None), (NM_PUCAT, "teks", None)] + ([(NM_LUAR, "teks", None)] if not all(pilih_) else []))
     fig.add_hline(y=0, line_color="#555", line_width=1); fig.update_xaxes(tickfont=dict(size=10)); return fig
 
 
@@ -550,7 +570,7 @@ def fig_kab(R):
     warna = [(MERAH if v > 0 else BIRU) if (a_ > 0 and abs(v) >= a_) else (MERAH_P if v > 0 else BIRU_P) for v in d]
     fig = go.Figure(go.Bar(y=list(d.index), x=d.values, orientation="h", showlegend=False, marker=dict(color=warna, line=dict(color=[MERAH if v > 0 else BIRU for v in d], width=1)), text=[n(v, 1, True) for v in d], textposition="outside", textfont_size=10, cliponaxis=False, hovertemplate="%{y}<br>selisih %{x:+.1f} bulan per 100<extra></extra>"))
     if a_ > 0: fig.add_vrect(x0=-a_, x1=a_, fillcolor="#8793a3", opacity=0.15, line_width=0, layer="below")
-    _ket(fig, [("beda nyata", "kotak", K_NYATA), ("belum pasti", "kotak", K_PUCAT)] + ([("naik-turun alami", "kotak", K_ABU)] if a_ > 0 else []), h=True)
+    _ket(fig, [(NM_NYATA, "teks", None), (NM_PUCAT, "teks", None)] + ([("naik-turun alami", "kotak", K_ABU)] if a_ > 0 else []), h=True)
     fig.add_vline(x=0, line_color="#555", line_width=1.2); lim = max(a_ * 1.15, float(d.abs().max()) * 1.4, 3.0)
     fig.update_xaxes(range=[-lim, lim]); fig.update_yaxes(type="category", tickmode="array", tickvals=list(d.index), ticktext=list(d.index), automargin=True, tickfont=dict(size=10)); return fig
 
@@ -577,7 +597,7 @@ def peta_dari(R, mode, tinggi, lebar=400, G=None):
     if mode == "Sebelum" and G is not None:
         return fig_peta(a, "selisih", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, sel=G, catatan=f"{len(G)} sel GCM, hujan GCM mentah<br>sebelum downscaling")
     kat = f"{int(a['nyata'].sum())} dari {len(a)} kotak beda nyata" if a["nyata"].any() else "belum ada kotak yang beda nyata<br>warna hanya menunjukkan arah"
-    return fig_peta(a, "selisih", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, mask=a["nyata"], catatan=kat, legenda=[("beda nyata", K_NYATA), ("belum pasti", K_PUCAT)])
+    return fig_peta(a, "selisih", -lim, lim, "bln/100", SELISIH, tinggi, lebar, zmid=0, mask=a["nyata"], catatan=kat, legenda=[(NM_NYATA, TRANSPARAN), (NM_PUCAT, TRANSPARAN)])
 
 
 # ------------------------------------------------------------------ teks "cara membaca" dan "kesimpulan" (menyesuaikan pilihan pengguna)
@@ -875,8 +895,8 @@ iframe(kh, int((H_KPI + H_BAN) * FSKALA))
 col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
 with col_peta:
     G_ = selisih_gcm(skala, PRESET[musim], t0, t1)
-    if mode == "Sebelum" and G_ is None: st.caption("Data sel GCM (dashboard_gcm_sel.csv.gz, notebook sel 14k) belum ada; peta sesudah downscaling ditampilkan."); mode = "Sesudah"
-    gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA, G=G_), H_PETA, tetap=True, judul={"Sesudah": "Peta · selisih · sesudah downscaling (5 km)", "Sebelum": "Peta · selisih · sebelum downscaling (sel GCM)"}[mode], legenda=True, leg_pos="dalam")
+    if mode == "Sebelum" and G_ is None: st.info("Peta sebelum downscaling belum bisa ditampilkan: berkas sel GCM (dashboard_gcm_sel.csv.gz) belum ada di folder dashboard. Jalankan sel 14k di notebook, lalu taruh berkasnya di folder ini. Pilih Sesudah (5 km) untuk melihat peta hasil downscaling.")
+    else: gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA, G=G_), H_PETA, tetap=True, judul={"Sesudah": "Peta · selisih · sesudah downscaling (5 km)", "Sebelum": "Peta · selisih · sebelum downscaling (sel GCM)"}[mode], legenda=True, leg_pos="dalam")
 with col_b:
     gambar(fig_tahun(R), H_KECIL, judul="Per tahun", legenda=True)
     gambar(fig_bulan(R), H_KECIL, judul="Per bulan", legenda=True)
