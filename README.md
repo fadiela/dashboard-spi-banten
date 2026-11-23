@@ -12,6 +12,9 @@ Dashboard Streamlit proyeksi bulan kering (SPI ≤ −1) Banten, hasil downscali
 
 Parameter bisa digabung: `/?embed=true&tinggi=210`.
 
+## Peta: sebelum dan sesudah downscaling
+Satu peta (selisih proyeksi - masa lalu). Pilihan **Downscaling**: *Sesudah (5 km)* = grid CHIRPS hasil downscaling, dengan warna pekat = beda nyata dan pucat = belum pasti; *Sebelum (GCM)* = sel GCM kasar dari hujan GCM mentah (butuh `dashboard_gcm_sel.csv.gz`; tanpa uji beda nyata). Skala warna keduanya sama. Nama kab/kota muncul saat kursor diarahkan ke titik putih (ubah `LABEL_WILAYAH` bila ingin tulisan tetap).
+
 ## Layar penuh
 Tombol **⛶ Layar penuh** di kanan atas. Jika browser memblokir, tekan **F11** (Windows/Linux) atau **Ctrl+Cmd+F** (Mac).
 
@@ -22,7 +25,7 @@ Tombol **⛶ Layar penuh** di kanan atas. Jika browser memblokir, tekan **F11** 
 - Angka mutlak proyeksi sengaja tidak ditampilkan karena model terlalu kering di masa lalu (lihat kartu *Masa lalu*); yang dibaca adalah selisih.
 
 ## Berkas
-`app_dashboard_spi.py` (aplikasi) · `dashboard_*.csv/.gz/.json` (ekspor notebook sel 14d-14f) · `banten_kabkota.geojson` · `config.toml` (tema; salin ke `.streamlit/config.toml`) · `requirements.txt`
+`app_dashboard_spi.py` (aplikasi) · `dashboard_*.csv/.gz/.json` (ekspor notebook sel 14d-14k; `dashboard_gcm_sel.csv.gz` dari sel 14k untuk peta sebelum downscaling) · `banten_kabkota.geojson` · `config.toml` (tema; salin ke `.streamlit/config.toml`) · `requirements.txt`
 
 ## Otomatis menyesuaikan layar
 Folder `ukuran_layar/` berisi komponen kecil yang melaporkan tinggi dan lebar jendela. Grafik mengisi sisa tinggi layar dan huruf membesar di layar lebar, termasuk saat tombol **⛶ Layar penuh** ditekan. Bila komponen tidak termuat, tampilan memakai ukuran tetap. Manual: `?vh=900&vw=1600` (paksa ukuran jendela) atau `?tinggi=200` (paksa tinggi grafik).
