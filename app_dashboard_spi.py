@@ -237,6 +237,23 @@ def wilayah_grid(ver):
 gr_ref, LAB = wilayah_grid(len(D["grid"]))
 
 
+def _koord(g):
+    if isinstance(g, (list, tuple)):
+        if g and isinstance(g[0], (int, float)): yield g
+        else:
+            for x in g: yield from _koord(x)
+
+
+def batas_peta(xs, ys, h):
+    """(barat, timur, selatan, utara): gabungan seluruh kotak grid dan garis batas kab/kota, ditambah ruang 3%."""
+    w, e, so, u = xs.min() - h, xs.max() + h, ys.min() - h, ys.max() + h
+    if gj is not None:
+        for f in gj["features"]:
+            for c in _koord(f["geometry"]["coordinates"]): w, e, so, u = min(w, c[0]), max(e, c[0]), min(so, c[1]), max(u, c[1])
+    px, py = (e - w) * 0.03, (u - so) * 0.03
+    return w - px, e + px, so - py, u + py
+
+
 def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, mask=None, catatan=None):
     """mask (Series bool): kotak True = beda nyata (warna pekat); kotak lain lebih pucat tetapi tetap berwarna sesuai arah. Peta dikunci: tidak bisa digeser/diperbesar."""
     xs, ys = np.unique(df["lon"].round(4)), np.unique(df["lat"].round(4)); h = float(np.median(np.diff(xs)) / 2) if len(xs) > 1 else 0.025
@@ -254,6 +271,7 @@ def fig_peta(df, kol, zmin, zmax, satuan, warna, tinggi, lebar=400, zmid=None, m
     zoom = float(np.clip(min(np.log2(360 * lebar / (512 * lon_r)), np.log2(360 * tinggi / (512 * lat_r))), 5, 11))      # 512 px/tile (MapLibre)
     lay = dict(style=PETA_STYLE, center=dict(lat=float((ys.min() + ys.max()) / 2), lon=float((xs.min() + xs.max()) / 2)), zoom=zoom)
     if gj is not None: lay["layers"] = [dict(sourcetype="geojson", source=gj, type="line", color="#33474a", line=dict(width=1.3), below="")]
+    w_, e_, s_, u_ = batas_peta(xs, ys, h); lay["bounds"] = dict(west=float(w_), east=float(e_), south=float(s_), north=float(u_))      # pas ke seluruh grid dan batas wilayah
     fig.update_layout(map=lay, dragmode=False)       # dragmode=False: tidak bisa digeser
     if len(LAB): fig.add_trace(go.Scattermap(lon=LAB["lon"], lat=LAB["lat"], mode="text", text=LAB["nama"], textfont=dict(size=10, color="#10243b"), hoverinfo="skip", showlegend=False))
     if catatan: fig.add_annotation(text=catatan, xref="paper", yref="paper", x=0.01, y=0.99, xanchor="left", yanchor="top", showarrow=False, align="left", font=dict(size=10.5, color="#44566c"), bgcolor="rgba(255,255,255,.88)", borderpad=3)
@@ -293,8 +311,8 @@ def iframe(html, tinggi):
 
 
 def seksi(judul, ket=""):
-    """Judul seksi gaya halaman lain (huruf kapital tebal + keterangan kecil)."""
-    st.markdown(f'<div class="seksi">{judul}<span>{ket}</span></div>', unsafe_allow_html=True)
+    """Judul seksi. Memakai <p> (bukan <div>): Streamlit memberi margin negatif pada wadah markdown yang hanya diimbangi oleh <p>; dengan <div> elemen berikutnya tertarik ke atas dan menimpa judul."""
+    st.markdown(f'<p style="font-size:.8rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#10243b;line-height:1.4;margin:.45rem 0 1rem;padding:0">{judul}<span style="font-size:.72rem;font-weight:500;letter-spacing:0;text-transform:none;color:#5b6b7f;margin-left:.5rem">{ket}</span></p>', unsafe_allow_html=True)
 
 
 # ------------------------------------------------------------------ analisis (dipakai dashboard dan laporan)
@@ -640,7 +658,7 @@ def tabel_tiga_jangka(t0, t1, bulan):
     rows = []
     for s_ in meta["spi_skala"]:
         Rk = ringkas(s_, bulan, t0, t1)
-        if Rk: rows.append({"Jangka": NAMA_SKALA_PANJANG.get(s_, s_), "Masa lalu (model)": n(Rk["base"]), "Pengamatan": n(Rk["ref"]), f"Proyeksi {t0}-{t1}": n(Rk["proy"]), "Selisih": n(Rk["sel"], 1, True), "Naik-turun alami (±)": n(Rk["amb"]) if np.isfinite(Rk["amb"]) else "-", "Tafsir": f'{SIM[Rk["kode"]]} {KATA[Rk["kode"]]}'})
+        if Rk: rows.append({"Jangka": NAMA_SKALA_PANJANG.get(s_, s_), "Masa lalu (model)": n(Rk["base"]), "Pengamatan": n(Rk["ref"]), f"Proyeksi {t0}-{t1}": n(Rk["proy"]), "Selisih": n(Rk["sel"], 1, True), "Naik-turun (±)": n(Rk["amb"]) if np.isfinite(Rk["amb"]) else "-", "Tafsir": f'{SIM[Rk["kode"]]} {KATA[Rk["kode"]]}'})
     return pd.DataFrame(rows).set_index("Jangka") if rows else None
 
 
@@ -809,7 +827,7 @@ kh, cek, n_ok, yak, yak_c, am, naik, turun = kartu_html(R, sm, atas=banner(R, sm
 iframe(kh, int((H_KPI + H_BAN) * FSKALA))
 
 seksi("Perubahan frekuensi bulan kering", f"proyeksi {t0}-{t1} dibanding masa lalu model (1981-2010) · {NAMA_SKALA_PANJANG.get(skala, skala)} · {musim.lower()}")
-col_peta, col_b, col_c = st.columns([3.6, 4.2, 4.2], gap="small")
+col_peta, col_b, col_c = st.columns([4.2, 3.9, 3.9], gap="small")
 with col_peta:
     gambar(peta_dari(R, mode, H_PETA, LEBAR_PETA), H_PETA, tetap=True, judul={"Selisih": "Peta · selisih vs masa lalu · pekat = nyata, pucat = belum pasti", "Kering": "Peta · bulan kering per 100 bulan", "Bias": "Peta · bias masa lalu: model − nyata (bln/100)"}[mode])
 with col_b:
@@ -831,21 +849,13 @@ if D["reg"] is not None:
     if di: st.caption(f"Median simulasi kering pada {di['n_k']} dari {di['N']} bulan · paling kering {di['mn']} (SPI {n(di['mn_v'], 2)}) · rangkaian terpanjang {di['best']} bulan berturut-turut" + (f" ({di['a']} s/d {di['b']})" if di['best'] else "") + " · variabilitas internal satu simulasi, bukan ramalan kejadian nyata.")
 
 seksi("Ringkasan tiga jangka dan gerbang model", "tabel ikut musim dan rentang tahun yang dipilih")
-c_t1, c_t2 = st.columns([5, 7], gap="small")
+c_t1, c_t2 = st.columns([6, 6], gap="small")
 with c_t1:
     tb = tabel_tiga_jangka(t0, t1, PRESET[musim])
     if tb is not None: st.dataframe(tb, use_container_width=True)
 with c_t2:
     tg = tabel_gerbang()
     if tg is not None: st.dataframe(tg, use_container_width=True)
-
-T = teks_panel(R, sm, am, cek, n_ok, yak, naik, turun, mode)
-with st.expander("Cara membaca dan kesimpulan tiap panel"):
-    st.markdown(f'<div class="pan">{ISTILAH}</div>', unsafe_allow_html=True)
-    for k in ("k_sel", "k_model", "k_lalu", "k_yak", "peta", "blok", "bulan", "model", "kab"):
-        st.markdown(f'<div class="pan"><h4>{T[k][0]}</h4>{T[k][1]}<div class="kes"><b>Kesimpulan:</b> {T[k][2]}</div></div>', unsafe_allow_html=True)
-    ts_ = teks_deret(skala)
-    if ts_: st.markdown(f'<div class="pan"><h4>Deret SPI bulanan</h4>{ts_[0]}<div class="kes"><b>Kesimpulan:</b> {ts_[1]}</div></div>', unsafe_allow_html=True)
 
 FA, FB, FC = (' style="grid-template-columns:1fr"', "<div>", "</div>") if EMBED else ("", "", "")      # [INTEGRASI] footer 1 kotak mengikuti gaya app.py
 st.markdown(f'<div class="foot"{FA}>{FB}{meta.get("gcm")} {meta.get("skenario")} · acuan {meta.get("target")} · run {meta.get("tanggal_run", "-")} · gambaran kecenderungan, bukan ramalan cuaca · pola kotak peta mengikuti sel GCM yang kasar · uji beda nyata: {"formal (notebook, block bootstrap)" if R.get("uji") == "resmi" else "pendekatan cepat (rentang tahun bukan seluruh horizon)"}{" · " + PEMBUAT if PEMBUAT else ""}{FC}</div>', unsafe_allow_html=True)
