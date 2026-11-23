@@ -2,19 +2,14 @@
   "gcm": "CMCC-ESM2",
   "skenario": "SSP370 (satu anggota)",
   "target": "CHIRPS",
-  "model": "P: Neural Net [mu+V1]",
-  "set_fitur": "P2",
-  "model_layak": [
-    "Random Forest",
-    "XGBoost",
-    "Neural Net"
-  ],
-  "status_gerbang": "dipilih lewat peringkat gabungan Tingkat 1 + 2 (CRPS Tingkat 1 terendah: XGBoost); lebih baik daripada klimatologi pada Tingkat 1; sebaran/frekuensi kering Tingkat 2 meleset dari pengamatan: baca perubahan relatif",
+  "model": "P: XGBoost [mu+V1]",
+  "set_fitur": "P",
+  "status_gerbang": "terbaik dari 4 model (tuning setara); lebih baik daripada klimatologi pada Tingkat 1; sebaran/frekuensi kering Tingkat 2 meleset dari pengamatan: baca perubahan relatif",
   "horizon": [
     2026,
     2050
   ],
-  "n_anggota_ensemble": 100,
+  "n_anggota_ensemble": 20,
   "spi_skala": [
     "SPI-3",
     "SPI-6",
@@ -22,9 +17,9 @@
   ],
   "ambang_kering": -1.0,
   "proyeksi_pct": {
-    "SPI-3": 21.07442715748085,
-    "SPI-6": 19.99497517548365,
-    "SPI-12": 20.822078920694835
+    "SPI-3": 26.2833451969358,
+    "SPI-6": 25.33962506420134,
+    "SPI-12": 29.501153402537483
   },
   "acuan_target_pct": {
     "SPI-3": 16.180661362225607,
@@ -32,14 +27,14 @@
     "SPI-12": 15.228936933807994
   },
   "baseline_model_sendiri_pct": {
-    "SPI-3": 21.148425596749618,
-    "SPI-6": 21.549331341584864,
-    "SPI-12": 22.73324216375792
+    "SPI-3": 24.334405507589867,
+    "SPI-6": 25.308009674206858,
+    "SPI-12": 26.526837139301318
   },
   "baris_prediktor_luar_rentang_pct": {
-    "2026-2050": 9.666666666666666,
-    "2051-2075": 19.666666666666664,
-    "2076-2100": 20.0
+    "2026-2050": 18.333333333333332,
+    "2051-2075": 61.66666666666667,
+    "2076-2100": 82.0
   },
   "gerbang": {
     "GLM Gamma": {
@@ -59,7 +54,7 @@
     },
     "Neural Net": {
       "a": true,
-      "b": true,
+      "b": false,
       "c": false
     }
   },
@@ -67,7 +62,7 @@
     "Satu GCM, satu skenario, satu anggota: proyeksi bersyarat skenario, bukan prediksi.",
     "Nilai satu tahun adalah satu realisasi variabilitas, bukan ramalan tahun itu: GCM free-running tidak sefase dengan kejadian nyata.",
     "Pita p10-p90 = sebaran antar-anggota ensemble dari satu model; tidak mencakup ketidakpastian model, skenario, atau GCM lain.",
-    "Status model: dipilih lewat peringkat gabungan Tingkat 1 + 2 (CRPS Tingkat 1 terendah: XGBoost); lebih baik daripada klimatologi pada Tingkat 1; sebaran/frekuensi kering Tingkat 2 meleset dari pengamatan: baca perubahan relatif. Baca perubahan terhadap baseline model sendiri, bukan nilai mutlak.",
+    "Status model: terbaik dari 4 model (tuning setara); lebih baik daripada klimatologi pada Tingkat 1; sebaran/frekuensi kering Tingkat 2 meleset dari pengamatan: baca perubahan relatif. Baca perubahan terhadap baseline model sendiri, bukan nilai mutlak.",
     "Tahun awal deret: k-1 bulan pertama SPI-k kosong (lihat n_bulan_valid).",
     "Pola tahun/bulan kering pada deret berasal dari variabilitas internal GCM (mirip ENSO) pada satu lintasan, bukan prediksi kejadian nyata; agregasi banyak tahun/bulan lebih bermakna daripada satu bulan.",
     "Peluang kering = porsi anggota ensemble dengan SPI <= -1. Pita antar-anggota sempit karena hanya derau di sekitar mu yang sama; bukan ukuran ketidakpastian iklim.",
@@ -87,7 +82,7 @@
       1981,
       2010
     ],
-    "n_anggota": 100
+    "n_anggota": 20
   },
   "korelasi": {
     "berkas": [
@@ -103,7 +98,7 @@
       2020
     ],
     "r_kritis_p05": 0.3120063686684674,
-    "model": "Neural Net",
+    "model": "XGBoost",
     "catatan": [
       "r GCM-target: korelasi antar-tahun pada rata-rata wilayah, hanya periode latih (sel 5.12). r model: Tingkat 1 (prediktor ERA5), out-of-fold, rata-rata wilayah.",
       "Ada 17 uji (12 bulan, 4 musim, tahunan); hanya yang lolos FDR dianggap bukti. Dengan sekitar 34 tahun, galat baku tiap korelasi sekitar 0,17, jadi selisih kecil jangan ditafsirkan.",
@@ -111,49 +106,49 @@
     ]
   },
   "konsistensi_arah": {
-    "model": "Neural Net",
+    "model": "XGBoost",
     "toleransi_pct": 1.0,
     "jendela": [
       {
         "jendela": "2026-2050",
         "peran": "dilaporkan",
         "gcm_pr_mentah_pct": -14.74,
-        "model_pct": 3.23,
-        "luar_rentang_pct": 9.7,
-        "berlawanan": true,
+        "model_pct": 0.05,
+        "luar_rentang_pct": 18.3,
+        "berlawanan": false,
         "semua_model_pct": {
-          "GLM Gamma": 5.35,
-          "Random Forest": -0.71,
-          "XGBoost": 0.35,
-          "Neural Net": 3.23
+          "GLM Gamma": 30.18,
+          "Random Forest": 8.66,
+          "XGBoost": 0.05,
+          "Neural Net": 9.91
         }
       },
       {
         "jendela": "2051-2075",
         "peran": "diagnostik",
         "gcm_pr_mentah_pct": -4.94,
-        "model_pct": 15.85,
-        "luar_rentang_pct": 19.7,
+        "model_pct": 14.7,
+        "luar_rentang_pct": 61.7,
         "berlawanan": true,
         "semua_model_pct": {
-          "GLM Gamma": 25.27,
-          "Random Forest": 10.47,
-          "XGBoost": 11.87,
-          "Neural Net": 15.85
+          "GLM Gamma": 68.38,
+          "Random Forest": 27.02,
+          "XGBoost": 14.7,
+          "Neural Net": 31.25
         }
       },
       {
         "jendela": "2076-2100",
         "peran": "diagnostik",
         "gcm_pr_mentah_pct": -15.0,
-        "model_pct": 14.11,
-        "luar_rentang_pct": 20.0,
+        "model_pct": 9.0,
+        "luar_rentang_pct": 82.0,
         "berlawanan": true,
         "semua_model_pct": {
-          "GLM Gamma": 23.32,
-          "Random Forest": 4.81,
-          "XGBoost": 6.58,
-          "Neural Net": 14.11
+          "GLM Gamma": 78.56,
+          "Random Forest": 27.75,
+          "XGBoost": 9.0,
+          "Neural Net": 36.41
         }
       }
     ],
@@ -164,6 +159,7 @@
         "2076-2100"
       ],
       "Random Forest": [
+        "2026-2050",
         "2051-2075",
         "2076-2100"
       ],
@@ -182,14 +178,14 @@
   "versi_notebook": "v22",
   "model_transfer_terbaik": {
     "model": "Random Forest",
-    "selisih_kering_pp": 2.155881513883603,
-    "model_tampil": "Neural Net",
-    "selisih_kering_pp_model_tampil": 3.51535755039939,
+    "selisih_kering_pp": 1.2347322598368642,
+    "model_tampil": "XGBoost",
+    "selisih_kering_pp_model_tampil": 7.207192215037406,
     "selisih_semua": {
-      "GLM Gamma": 3.0572593085668416,
-      "Random Forest": 2.155881513883603,
-      "XGBoost": 7.778570221038837,
-      "Neural Net": 3.51535755039939
+      "GLM Gamma": 4.208877477705926,
+      "Random Forest": 1.2347322598368642,
+      "XGBoost": 7.207192215037406,
+      "Neural Net": 4.752836946874602
     }
   },
   "holdout": {
@@ -197,36 +193,41 @@
       2021,
       2025
     ],
-    "model": "Neural Net",
-    "crpss_t1": 0.17036819743395715,
-    "r_anom_t1": 0.6211205992135588,
+    "model": "XGBoost",
+    "crpss_t1": 0.2541737848306327,
+    "r_anom_t1": 0.6954524508124562,
     "lebih_baik_dari_klimatologi": true,
     "crpss_per_tahun": {
-      "2021": -0.035502210807262014,
-      "2022": 0.3369038031683993,
-      "2023": 0.38656452280402687,
-      "2024": 0.033775687480163685,
-      "2025": 0.14075957374930193
+      "2021": 0.02609077993666198,
+      "2022": 0.37335302608291443,
+      "2023": 0.3191288197754225,
+      "2024": 0.31086306679618103,
+      "2025": 0.2352751393616329
     },
-    "tahun_positif": 4,
+    "tahun_positif": 5,
     "n_tahun": 5,
     "semua_model_crpss_t1": {
-      "GLM Gamma": -0.047957393932817505,
-      "Random Forest": 0.1698263452258244,
-      "XGBoost": 0.11973754388126456,
-      "Neural Net": 0.17036819743395715
+      "GLM Gamma": -0.106445722413548,
+      "Random Forest": 0.20979481744050676,
+      "XGBoost": 0.2541737848306327,
+      "Neural Net": 0.16549855171263406
     },
-    "crpss_t1_cv_seleksi": 0.12129042688044245
+    "crpss_t1_cv_seleksi": 0.16551300517374645
   },
   "pemilihan_model": "terbaik di antara 4 model (CRPS Tingkat 1 terkecil, CV 1981-2020, tuning setara)",
   "tanggal_run": "2026-11-23",
   "seed": 42,
-  "n_sim_proyeksi": 100,
-  "prediktor_tidak_stabil": [],
-  "ci_tingkat2_memuat_nol": false,
+  "n_sim_proyeksi": 20,
+  "prediktor_tidak_stabil": [
+    "pi_hus850_jbr",
+    "pi_sst_ie",
+    "pi_prw_jbr",
+    "pi_ua850_sj"
+  ],
+  "ci_tingkat2_memuat_nol": true,
   "uji": {
     "berkas": "dashboard_uji.csv",
-    "model": "Neural Net",
+    "model": "XGBoost",
     "periode_baseline": [
       1981,
       2010
@@ -241,32 +242,32 @@
     "alfa_fdr": 0.05,
     "ringkas": {
       "SPI-3": {
-        "selisih": -0.1493,
-        "lo": -9.5118,
-        "hi": 8.3336,
-        "p": 0.841,
+        "selisih": 1.8375,
+        "lo": -8.5756,
+        "hi": 11.0538,
+        "p": 0.872,
         "nyata": false,
-        "bulan_nyata": 2,
-        "musim_nyata": 1,
+        "bulan_nyata": 0,
+        "musim_nyata": 0,
         "grid_nyata": 0,
         "n_grid": 396
       },
       "SPI-6": {
-        "selisih": -1.7394,
-        "lo": -12.1193,
-        "hi": 7.6846,
-        "p": 0.5835,
+        "selisih": -0.2448,
+        "lo": -12.4409,
+        "hi": 9.8514,
+        "p": 0.7735,
         "nyata": false,
-        "bulan_nyata": 3,
+        "bulan_nyata": 0,
         "musim_nyata": 0,
         "grid_nyata": 0,
         "n_grid": 396
       },
       "SPI-12": {
-        "selisih": -2.5602,
-        "lo": -14.3351,
-        "hi": 9.5702,
-        "p": 0.5705,
+        "selisih": 2.5164,
+        "lo": -14.5813,
+        "hi": 17.8193,
+        "p": 0.9745,
         "nyata": false,
         "bulan_nyata": 0,
         "musim_nyata": 0,
@@ -279,60 +280,5 @@
       "Keluarga FDR: 17 uji (wilayah, 12 bulan, 4 musim) per skala SPI; per grid satu keluarga tersendiri.",
       "Hanya satu GCM, satu skenario, satu anggota: ketidakpastian model, skenario, dan GCM lain tidak tercakup, jadi 'belum beda nyata' bukan bukti tidak ada perubahan."
     ]
-  },
-  "klaim_arah": "belum_dapat_disimpulkan",
-  "klaim_arah_teks": "Arah perubahan 2026-2050 belum dapat disimpulkan: tanda perubahan hujan berbeda antar model atau antar jalur prediktor; arah tidak sejalan dengan hujan mentah GCM (-14.7%); uji beda nyata 14j (FDR) tidak signifikan.",
-  "sensitivitas_jalur": {
-    "P2 (tanpa detrend)": {
-      "Neural Net": 15.189664736707421,
-      "Random Forest": 10.368983433555723,
-      "XGBoost": 6.490951717863247
-    },
-    "P2D (detrend polinom)": {
-      "Neural Net": 1.8554559065603105,
-      "Random Forest": -1.9732442747630974,
-      "XGBoost": -2.570229756736997
-    },
-    "P3 (dinamika + detrend)": {
-      "Neural Net": -2.5280225049571503,
-      "Random Forest": -3.0575184687069323,
-      "XGBoost": -3.8389957400338237
-    }
-  },
-  "validasi": {
-    "model": "Neural Net",
-    "crpss_t1_cv": 0.12129042688044245,
-    "crpss_t1_rolling": 0.10900448409585553,
-    "crpss_t1_holdout": 0.17036819743395715,
-    "holdout_status": "data pengembangan: 2021-2025 sudah dilihat berulang (v20-v24); bukan uji independen",
-    "crpss_t2_oof": -0.41425289322677683,
-    "crpss_t2_klim_stokastik": -0.027062403970874893,
-    "kering_t2_pct": 20.00398863108068,
-    "kering_obs_pct": 16.48863108068129,
-    "spi12_sd_t2": 1.3758835594288576,
-    "spi12_sd_obs": 1.0886574969610996,
-    "n_sel_gcm": 4,
-    "jalur_prediktor": "P2D (detrend polinom)",
-    "detrend": "poly",
-    "harmonisasi": "qm"
-  },
-  "rolling_origin": {
-    "model": "Neural Net",
-    "crpss": 0.10900448409585553,
-    "fold_positif": 4,
-    "n_fold": 5,
-    "lebih_baik": true,
-    "per_fold": {
-      "1996-2000": -0.10350193745741154,
-      "2001-2005": 0.1889390117488322,
-      "2006-2010": 0.19122525286579617,
-      "2011-2015": 0.0818529932941664,
-      "2016-2020": 0.1865071000278944
-    },
-    "semua_model": {
-      "Random Forest": 0.10724092176115581,
-      "XGBoost": 0.15098135064338464,
-      "Neural Net": 0.10900448409585553
-    }
   }
 }

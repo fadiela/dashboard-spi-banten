@@ -1,14 +1,14 @@
 model,varian,delta_mu_pct,jendela,tidak_stabil
-GLM Gamma,Dipotong (dipakai di dashboard),4.146,2026-2050,
-GLM Gamma,Tanpa pemotongan,4.796,2026-2050,
-GLM Gamma,Hanya prediktor stabil,4.146,2026-2050,
-Random Forest,Dipotong (dipakai di dashboard),-1.973,2026-2050,
-Random Forest,Tanpa pemotongan,-1.973,2026-2050,
-Random Forest,Hanya prediktor stabil,-1.973,2026-2050,
-XGBoost,Dipotong (dipakai di dashboard),-2.57,2026-2050,
-XGBoost,Tanpa pemotongan,-2.57,2026-2050,
-XGBoost,Hanya prediktor stabil,-2.57,2026-2050,
-Neural Net,Dipotong (dipakai di dashboard),1.855,2026-2050,
-Neural Net,Tanpa pemotongan,2.252,2026-2050,
-Neural Net,Hanya prediktor stabil,1.855,2026-2050,
-Hujan GCM mentah,Hujan GCM mentah,-14.744,2026-2050,
+GLM Gamma,Dipotong (dipakai di dashboard),29.02,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+GLM Gamma,Tanpa pemotongan,34.829,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+GLM Gamma,Hanya prediktor stabil,9.707,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+Random Forest,Dipotong (dipakai di dashboard),7.957,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+Random Forest,Tanpa pemotongan,7.957,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+Random Forest,Hanya prediktor stabil,0.198,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+XGBoost,Dipotong (dipakai di dashboard),-0.758,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+XGBoost,Tanpa pemotongan,-0.758,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+XGBoost,Hanya prediktor stabil,-4.931,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+Neural Net,Dipotong (dipakai di dashboard),9.551,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+Neural Net,Tanpa pemotongan,12.682,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+Neural Net,Hanya prediktor stabil,-0.526,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
+Hujan GCM mentah,Hujan GCM mentah,-14.744,2026-2050,"pi_hus850_jbr, pi_sst_ie, pi_prw_jbr, pi_ua850_sj"
